@@ -1,4 +1,4 @@
-import { Twitter, Github, Linkedin } from 'lucide-react';
+import { X, Github, Linkedin } from 'lucide-react';
 
 const footerLinks = {
   Product: ['Marketplace', 'Pricing', 'Changelog', 'Roadmap'],
@@ -22,7 +22,7 @@ export function Footer() {
           </p>
           <div className="flex gap-4">
             <a href="#" className="text-[#64748B] hover:text-[#22D3EE] transition-colors">
-              <Twitter className="w-5 h-5" />
+              <X className="w-5 h-5" />
             </a>
             <a href="#" className="text-[#64748B] hover:text-[#22D3EE] transition-colors">
               <Github className="w-5 h-5" />
