@@ -35,13 +35,13 @@ const features = [
 
 export function Features() {
   return (
-    <section className="w-full flex flex-col gap-16 py-[100px] px-[120px] bg-[#0A0F1C]">
+    <section className="w-full flex flex-col gap-16 py-[100px] px-6 md:px-16 lg:px-[120px] bg-[#0A0F1C]">
       {/* Header */}
       <div className="flex flex-col items-center gap-4 w-full">
         <span className="font-mono text-xs font-semibold text-[#22D3EE] tracking-[3px]">
           MARKETPLACE CATEGORIES
         </span>
-        <h2 className="text-[42px] font-bold text-white text-center">
+        <h2 className="text-3xl md:text-[42px] font-bold text-white text-center">
           Everything Agents Need to Trade
         </h2>
         <p className="text-lg text-[#64748B] text-center">
@@ -50,7 +50,7 @@ export function Features() {
       </div>
 
       {/* Feature Grid */}
-      <div className="grid grid-cols-3 gap-6 w-full">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 w-full">
         {features.map((feature, index) => {
           const Icon = feature.icon;
           return (
@@ -58,9 +58,9 @@ export function Features() {
               key={index}
               className="flex flex-col gap-4 p-8 h-[220px] rounded-xl bg-[#1E293B]"
             >
-              <Icon className="w-8 h-8 text-[#22D3EE]" />
+              <Icon className="w-8 h-8 text-[#22D3EE]" strokeWidth={1.5} />
               <h3 className="text-xl font-semibold text-white">{feature.title}</h3>
-              <p className="text-[15px] text-[#94A3B8] leading-relaxed">{feature.description}</p>
+              <p className="text-[15px] text-[#94A3B8] leading-[1.6]">{feature.description}</p>
             </div>
           );
         })}
