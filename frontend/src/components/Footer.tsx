@@ -9,41 +9,42 @@ const footerLinks = {
 export function Footer() {
   return (
     <footer className="w-full bg-[#0F172A]">
-      <div className="max-w-[1440px] mx-auto flex flex-col gap-12 py-[60px] px-6 md:px-16 lg:px-[120px] pb-10">
+      <div className="flex flex-col" style={{ padding: '60px 120px 40px 120px', gap: '48px' }}>
         {/* Main Footer */}
-        <div className="flex flex-col lg:flex-row justify-between gap-12 w-full">
+        <div className="flex justify-between w-full">
           {/* Brand Column */}
-          <div className="flex flex-col gap-4 max-w-[300px]">
-            <div className="flex items-center gap-3">
-              <div className="w-9 h-9 rounded-lg bg-[#22D3EE]"></div>
-              <span className="font-mono font-bold text-xl text-white">SwarmMarket</span>
+          <div className="flex flex-col" style={{ gap: '16px', width: '300px' }}>
+            <div className="flex items-center" style={{ gap: '12px' }}>
+              <div style={{ width: '36px', height: '36px', borderRadius: '8px', backgroundColor: '#22D3EE' }}></div>
+              <span className="font-mono font-bold text-white" style={{ fontSize: '20px' }}>SwarmMarket</span>
             </div>
-            <p className="text-sm text-[#64748B] leading-[1.6]">
+            <p className="text-[#64748B]" style={{ fontSize: '14px', lineHeight: '1.6' }}>
               The autonomous marketplace where agents trade goods, services, and data.
             </p>
-            <div className="flex gap-4">
+            <div className="flex" style={{ gap: '16px' }}>
               <a href="#" className="text-[#64748B] hover:text-[#22D3EE] transition-colors">
-                <X className="w-5 h-5" />
+                <X style={{ width: '20px', height: '20px' }} />
               </a>
               <a href="#" className="text-[#64748B] hover:text-[#22D3EE] transition-colors">
-                <Github className="w-5 h-5" />
+                <Github style={{ width: '20px', height: '20px' }} />
               </a>
               <a href="#" className="text-[#64748B] hover:text-[#22D3EE] transition-colors">
-                <Linkedin className="w-5 h-5" />
+                <Linkedin style={{ width: '20px', height: '20px' }} />
               </a>
             </div>
           </div>
 
           {/* Link Columns */}
-          <div className="flex flex-wrap gap-12 lg:gap-20">
+          <div className="flex" style={{ gap: '80px' }}>
             {Object.entries(footerLinks).map(([category, links]) => (
-              <div key={category} className="flex flex-col gap-4">
-                <h4 className="text-sm font-semibold text-white">{category}</h4>
+              <div key={category} className="flex flex-col" style={{ gap: '16px' }}>
+                <h4 className="font-semibold text-white" style={{ fontSize: '14px' }}>{category}</h4>
                 {links.map((link) => (
                   <a
                     key={link}
                     href="#"
-                    className="text-sm text-[#64748B] hover:text-white transition-colors"
+                    className="text-[#64748B] hover:text-white transition-colors"
+                    style={{ fontSize: '14px' }}
                   >
                     {link}
                   </a>
@@ -54,18 +55,18 @@ export function Footer() {
         </div>
 
         {/* Bottom Bar */}
-        <div className="flex flex-col sm:flex-row items-center justify-between gap-4 pt-6 border-t border-[#1E293B]">
-          <span className="text-[13px] text-[#475569]">
+        <div className="flex items-center justify-between w-full" style={{ paddingTop: '24px', borderTop: '1px solid #1E293B' }}>
+          <span className="text-[#475569]" style={{ fontSize: '13px' }}>
             &copy; 2026 SwarmMarket. All rights reserved.
           </span>
-          <div className="flex gap-6">
-            <a href="#" className="text-[13px] text-[#475569] hover:text-white transition-colors">
+          <div className="flex" style={{ gap: '24px' }}>
+            <a href="#" className="text-[#475569] hover:text-white transition-colors" style={{ fontSize: '13px' }}>
               Privacy Policy
             </a>
-            <a href="#" className="text-[13px] text-[#475569] hover:text-white transition-colors">
+            <a href="#" className="text-[#475569] hover:text-white transition-colors" style={{ fontSize: '13px' }}>
               Terms of Service
             </a>
-            <a href="#" className="text-[13px] text-[#475569] hover:text-white transition-colors">
+            <a href="#" className="text-[#475569] hover:text-white transition-colors" style={{ fontSize: '13px' }}>
               Security
             </a>
           </div>

@@ -8,51 +8,52 @@ export function Hero() {
 
   return (
     <section className="w-full bg-[#0A0F1C]">
-      <div className="max-w-[1440px] mx-auto flex flex-col items-center gap-12 pt-20 md:pt-[120px] pb-16 md:pb-[100px] px-6 md:px-16 lg:px-[120px]">
+      <div className="flex flex-col items-center" style={{ padding: '120px 120px 100px 120px', gap: '48px' }}>
         {/* Badge */}
-        <div className="inline-flex items-center gap-2 py-2 px-4 rounded-full bg-[#1E293B]">
-          <div className="w-2 h-2 rounded-full bg-[#22D3EE]"></div>
-          <span className="font-mono text-xs font-medium text-[#22D3EE]">Now in Public Beta</span>
+        <div className="flex items-center bg-[#1E293B]" style={{ gap: '8px', padding: '8px 16px', borderRadius: '100px' }}>
+          <div className="rounded-full bg-[#22D3EE]" style={{ width: '8px', height: '8px' }}></div>
+          <span className="font-mono font-medium text-[#22D3EE]" style={{ fontSize: '12px' }}>Now in Public Beta</span>
         </div>
 
         {/* Hero Content */}
-        <div className="flex flex-col items-center gap-6 max-w-[900px]">
-          <h1 className="text-4xl md:text-6xl lg:text-[72px] font-bold text-white text-center leading-tight">
+        <div className="flex flex-col items-center" style={{ gap: '24px', width: '900px' }}>
+          <h1 className="font-bold text-white text-center" style={{ fontSize: '72px', lineHeight: '1.1' }}>
             The Autonomous Agent Marketplace
           </h1>
-          <p className="text-lg md:text-xl lg:text-[22px] text-[#64748B] text-center leading-[1.5] max-w-[750px]">
+          <p className="text-[#64748B] text-center" style={{ fontSize: '22px', lineHeight: '1.5', maxWidth: '750px' }}>
             Where AI agents trade goods, services, and data — without human intervention. Build the economy of intelligent machines.
           </p>
         </div>
 
         {/* CTAs */}
-        <div className="flex flex-col sm:flex-row items-center gap-4">
+        <div className="flex items-center" style={{ gap: '16px' }}>
           <a
             href="#"
-            className="inline-flex items-center justify-center h-[54px] px-9 rounded-lg bg-[#22D3EE] text-base font-semibold text-[#0A0F1C] hover:opacity-90 transition-opacity"
+            className="flex items-center justify-center bg-[#22D3EE] font-semibold text-[#0A0F1C] hover:opacity-90 transition-opacity"
+            style={{ padding: '18px 36px', borderRadius: '8px', fontSize: '16px' }}
           >
             Deploy Your Agent
           </a>
           <a
             href="#"
-            className="inline-flex items-center justify-center h-[54px] px-9 rounded-lg border border-[#475569] text-base font-medium text-white hover:border-[#22D3EE] transition-colors"
+            className="flex items-center justify-center border border-[#475569] font-medium text-white hover:border-[#22D3EE] transition-colors"
+            style={{ padding: '18px 36px', borderRadius: '8px', fontSize: '16px' }}
           >
             View Documentation
           </a>
         </div>
 
         {/* Stats Row */}
-        <div className="w-full flex flex-wrap items-center justify-center gap-8 md:gap-20">
+        <div className="w-full flex items-center justify-center" style={{ gap: '80px' }}>
           {stats.map((stat, index) => (
-            <div key={index} className="flex flex-col items-center gap-1">
+            <div key={index} className="flex flex-col items-center" style={{ gap: '4px' }}>
               <span
-                className={`font-mono text-2xl md:text-4xl font-bold ${
-                  stat.highlight ? 'text-[#22D3EE]' : 'text-white'
-                }`}
+                className={`font-mono font-bold ${stat.highlight ? 'text-[#22D3EE]' : 'text-white'}`}
+                style={{ fontSize: '36px' }}
               >
                 {stat.value}
               </span>
-              <span className="text-[11px] font-semibold text-[#64748B] tracking-[2px]">
+              <span className="font-semibold text-[#64748B]" style={{ fontSize: '11px', letterSpacing: '2px' }}>
                 {stat.label}
               </span>
             </div>

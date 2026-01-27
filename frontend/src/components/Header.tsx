@@ -1,37 +1,38 @@
 export function Header() {
   return (
-    <header className="w-full h-20 bg-[#0A0F1C]">
-      <div className="max-w-[1440px] mx-auto h-full flex items-center justify-between px-6 md:px-16 lg:px-[120px]">
+    <header className="w-full h-[80px] bg-[#0A0F1C]">
+      <div className="h-full flex items-center justify-between" style={{ padding: '0 120px' }}>
         {/* Logo Section */}
-        <div className="flex items-center gap-3">
-          <div className="w-9 h-9 rounded-lg bg-[#22D3EE]"></div>
-          <span className="font-mono font-bold text-xl text-white">SwarmMarket</span>
+        <div className="flex items-center" style={{ gap: '12px' }}>
+          <div className="rounded-lg bg-[#22D3EE]" style={{ width: '36px', height: '36px', borderRadius: '8px' }}></div>
+          <span className="font-mono font-bold text-white" style={{ fontSize: '20px' }}>SwarmMarket</span>
         </div>
 
         {/* Navigation */}
-        <nav className="hidden md:flex items-center gap-10">
-          <a href="#" className="text-sm font-medium text-[#94A3B8] hover:text-white transition-colors">
+        <nav className="flex items-center" style={{ gap: '40px' }}>
+          <a href="#" className="font-medium text-[#94A3B8] hover:text-white transition-colors" style={{ fontSize: '14px' }}>
             Marketplace
           </a>
-          <a href="#" className="text-sm font-medium text-[#94A3B8] hover:text-white transition-colors">
+          <a href="#" className="font-medium text-[#94A3B8] hover:text-white transition-colors" style={{ fontSize: '14px' }}>
             For Agents
           </a>
-          <a href="#" className="text-sm font-medium text-[#94A3B8] hover:text-white transition-colors">
+          <a href="#" className="font-medium text-[#94A3B8] hover:text-white transition-colors" style={{ fontSize: '14px' }}>
             Developers
           </a>
-          <a href="#" className="text-sm font-medium text-[#94A3B8] hover:text-white transition-colors">
+          <a href="#" className="font-medium text-[#94A3B8] hover:text-white transition-colors" style={{ fontSize: '14px' }}>
             Documentation
           </a>
         </nav>
 
         {/* CTA Section */}
-        <div className="flex items-center gap-4">
-          <a href="#" className="hidden sm:block text-sm font-medium text-white hover:text-[#22D3EE] transition-colors">
+        <div className="flex items-center" style={{ gap: '16px' }}>
+          <a href="#" className="font-medium text-white hover:text-[#22D3EE] transition-colors" style={{ fontSize: '14px' }}>
             Sign In
           </a>
           <a
             href="#"
-            className="inline-flex items-center justify-center h-[42px] px-6 rounded-[6px] bg-[#22D3EE] text-sm font-semibold text-[#0A0F1C] hover:opacity-90 transition-opacity"
+            className="flex items-center justify-center bg-[#22D3EE] font-semibold text-[#0A0F1C] hover:opacity-90 transition-opacity"
+            style={{ padding: '12px 24px', borderRadius: '6px', fontSize: '14px' }}
           >
             Get Started
           </a>
