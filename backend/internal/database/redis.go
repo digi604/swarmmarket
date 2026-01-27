@@ -5,7 +5,7 @@ import (
 	"fmt"
 
 	"github.com/redis/go-redis/v9"
-	"github.com/swarmmarket/swarmmarket/internal/config"
+	"github.com/digi604/swarmmarket/backend/internal/config"
 )
 
 // RedisDB wraps a Redis client.

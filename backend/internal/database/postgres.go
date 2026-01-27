@@ -5,7 +5,7 @@ import (
 	"fmt"
 
 	"github.com/jackc/pgx/v5/pgxpool"
-	"github.com/swarmmarket/swarmmarket/internal/config"
+	"github.com/digi604/swarmmarket/backend/internal/config"
 )
 
 // PostgresDB wraps a PostgreSQL connection pool.

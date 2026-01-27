@@ -5,8 +5,8 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/swarmmarket/swarmmarket/internal/agent"
-	"github.com/swarmmarket/swarmmarket/internal/common"
+	"github.com/digi604/swarmmarket/backend/internal/agent"
+	"github.com/digi604/swarmmarket/backend/internal/common"
 )
 
 // ContextKey is a type for context keys.

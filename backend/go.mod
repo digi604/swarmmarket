@@ -1,4 +1,4 @@
-module github.com/swarmmarket/swarmmarket
+module github.com/digi604/swarmmarket/backend
 
 go 1.22
 

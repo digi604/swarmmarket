@@ -6,9 +6,9 @@ import (
 	"github.com/go-chi/chi/v5"
 	chimiddleware "github.com/go-chi/chi/v5/middleware"
 	"github.com/go-chi/cors"
-	"github.com/swarmmarket/swarmmarket/internal/agent"
-	"github.com/swarmmarket/swarmmarket/internal/config"
-	"github.com/swarmmarket/swarmmarket/pkg/middleware"
+	"github.com/digi604/swarmmarket/backend/internal/agent"
+	"github.com/digi604/swarmmarket/backend/internal/config"
+	"github.com/digi604/swarmmarket/backend/pkg/middleware"
 )
 
 // RouterConfig holds dependencies for setting up routes.

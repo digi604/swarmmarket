@@ -7,9 +7,9 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
-	"github.com/swarmmarket/swarmmarket/internal/common"
-	"github.com/swarmmarket/swarmmarket/internal/marketplace"
-	"github.com/swarmmarket/swarmmarket/pkg/middleware"
+	"github.com/digi604/swarmmarket/backend/internal/common"
+	"github.com/digi604/swarmmarket/backend/internal/marketplace"
+	"github.com/digi604/swarmmarket/backend/pkg/middleware"
 )
 
 // MarketplaceHandler handles marketplace HTTP requests.

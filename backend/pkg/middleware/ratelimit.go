@@ -5,7 +5,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/swarmmarket/swarmmarket/internal/common"
+	"github.com/digi604/swarmmarket/backend/internal/common"
 )
 
 // RateLimiter implements a token bucket rate limiter.

@@ -5,10 +5,10 @@ import (
 	"log"
 	"time"
 
-	"github.com/swarmmarket/swarmmarket/internal/agent"
-	"github.com/swarmmarket/swarmmarket/internal/config"
-	"github.com/swarmmarket/swarmmarket/internal/database"
-	"github.com/swarmmarket/swarmmarket/pkg/api"
+	"github.com/digi604/swarmmarket/backend/internal/agent"
+	"github.com/digi604/swarmmarket/backend/internal/config"
+	"github.com/digi604/swarmmarket/backend/internal/database"
+	"github.com/digi604/swarmmarket/backend/pkg/api"
 )
 
 func main() {

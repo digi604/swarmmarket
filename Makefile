@@ -1,118 +1,41 @@
-.PHONY: build run test clean docker-up docker-down migrate lint fmt help
+.PHONY: backend-build backend-run backend-test frontend-dev deploy help
 
-# Go parameters
-GOCMD=go
-GOBUILD=$(GOCMD) build
-GOTEST=$(GOCMD) test
-GOGET=$(GOCMD) get
-GOMOD=$(GOCMD) mod
-GOFMT=gofmt
-GOLINT=golangci-lint
+## Backend
+backend-build: ## Build backend
+	cd backend && make build
 
-# Binary names
-API_BINARY=bin/api
-WORKER_BINARY=bin/worker
-MIGRATE_BINARY=bin/migrate
+backend-run: ## Run backend API
+	cd backend && make run
 
-# Default target
-all: build
+backend-test: ## Run backend tests
+	cd backend && make test
 
-## Build
-build: ## Build all binaries
-	$(GOBUILD) -o $(API_BINARY) ./cmd/api
+backend-dev: ## Run backend with hot reload
+	cd backend && make dev
 
-build-api: ## Build API binary
-	$(GOBUILD) -o $(API_BINARY) ./cmd/api
+backend-lint: ## Lint backend code
+	cd backend && make lint
 
-build-worker: ## Build worker binary
-	$(GOBUILD) -o $(WORKER_BINARY) ./cmd/worker
+## Frontend
+frontend-dev: ## Run frontend dev server
+	cd frontend && npm run dev
 
-build-migrate: ## Build migrate binary
-	$(GOBUILD) -o $(MIGRATE_BINARY) ./cmd/migrate
-
-## Run
-run: ## Run the API server
-	$(GOCMD) run ./cmd/api
-
-run-worker: ## Run the worker
-	$(GOCMD) run ./cmd/worker
-
-## Test
-test: ## Run tests
-	$(GOTEST) -v -race -cover ./...
-
-test-short: ## Run short tests
-	$(GOTEST) -v -short ./...
-
-test-coverage: ## Run tests with coverage report
-	$(GOTEST) -v -race -coverprofile=coverage.out ./...
-	$(GOCMD) tool cover -html=coverage.out -o coverage.html
-
-## Development
-dev: ## Run with hot reload (requires air)
-	air -c .air.toml
+frontend-build: ## Build frontend
+	cd frontend && npm run build
 
 ## Docker
-docker-build: ## Build Docker image
-	docker build -t swarmmarket-api -f docker/Dockerfile .
+docker-build: ## Build all Docker images
+	docker build -t swarmmarket-api -f backend/docker/Dockerfile .
 
-docker-up: ## Start all services with Docker Compose
-	docker-compose -f docker/docker-compose.yml up -d
+docker-up: ## Start all services
+	cd backend && docker-compose -f docker/docker-compose.yml up -d
 
-docker-up-dev: ## Start all services including dev tools
-	docker-compose -f docker/docker-compose.yml --profile dev up -d
+docker-down: ## Stop all services
+	cd backend && docker-compose -f docker/docker-compose.yml down
 
-docker-down: ## Stop all Docker Compose services
-	docker-compose -f docker/docker-compose.yml down
-
-docker-logs: ## Tail Docker Compose logs
-	docker-compose -f docker/docker-compose.yml logs -f
-
-docker-clean: ## Remove all Docker Compose volumes
-	docker-compose -f docker/docker-compose.yml down -v
-
-## Database
-migrate-up: ## Run database migrations
-	psql -h localhost -U swarmmarket -d swarmmarket -f migrations/001_initial_schema.sql
-
-migrate-create: ## Create a new migration file (use: make migrate-create name=migration_name)
-	@read -p "Migration name: " name; \
-	touch migrations/$$(date +%Y%m%d%H%M%S)_$$name.sql
-
-db-shell: ## Open PostgreSQL shell
-	psql -h localhost -U swarmmarket -d swarmmarket
-
-redis-shell: ## Open Redis CLI
-	redis-cli
-
-## Code quality
-lint: ## Run linter
-	$(GOLINT) run ./...
-
-fmt: ## Format code
-	$(GOFMT) -s -w .
-
-vet: ## Run go vet
-	$(GOCMD) vet ./...
-
-## Dependencies
-deps: ## Download dependencies
-	$(GOMOD) download
-
-deps-tidy: ## Tidy dependencies
-	$(GOMOD) tidy
-
-deps-verify: ## Verify dependencies
-	$(GOMOD) verify
-
-deps-update: ## Update all dependencies
-	$(GOGET) -u ./...
-	$(GOMOD) tidy
-
-## Clean
-clean: ## Clean build artifacts
-	rm -rf bin/
-	rm -f coverage.out coverage.html
+## Deploy
+deploy: ## Deploy to Railway
+	railway up
 
 ## Help
 help: ## Display this help

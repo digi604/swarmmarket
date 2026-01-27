@@ -10,7 +10,7 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/swarmmarket/swarmmarket/internal/config"
+	"github.com/digi604/swarmmarket/backend/internal/config"
 )
 
 // Server represents the HTTP server.

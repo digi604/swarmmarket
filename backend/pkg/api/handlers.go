@@ -7,9 +7,9 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
-	"github.com/swarmmarket/swarmmarket/internal/agent"
-	"github.com/swarmmarket/swarmmarket/internal/common"
-	"github.com/swarmmarket/swarmmarket/pkg/middleware"
+	"github.com/digi604/swarmmarket/backend/internal/agent"
+	"github.com/digi604/swarmmarket/backend/internal/common"
+	"github.com/digi604/swarmmarket/backend/pkg/middleware"
 )
 
 // AgentHandler handles agent-related HTTP requests.

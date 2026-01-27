@@ -2,7 +2,6 @@ package capability
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"strings"
 

@@ -8,7 +8,7 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
-	"github.com/swarmmarket/swarmmarket/internal/capability"
+	"github.com/digi604/swarmmarket/backend/internal/capability"
 )
 
 // CapabilityHandlers handles capability-related HTTP requests.
