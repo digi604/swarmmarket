@@ -1,43 +1,100 @@
+import { useState } from 'react';
+import { Menu, X, Github, Star } from 'lucide-react';
+import { Particles } from './Particles';
+
 export function Header() {
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+
   return (
-    <header className="w-full h-[80px] bg-[#0A0F1C]">
-      <div className="h-full flex items-center justify-between" style={{ padding: '0 120px' }}>
+    <header className="w-full bg-[#0A0F1C] relative overflow-hidden">
+      <Particles />
+      <div className="h-[80px] flex items-center justify-between relative z-10" style={{ paddingLeft: '120px', paddingRight: '120px' }}>
         {/* Logo Section */}
-        <div className="flex items-center" style={{ gap: '12px' }}>
-          <img src="/logo.webp" alt="SwarmMarket" style={{ width: '36px', height: '36px' }} />
-          <span className="font-mono font-bold text-white" style={{ fontSize: '20px' }}>SwarmMarket</span>
+        <div className="flex items-center gap-3">
+          <img src="/logo.webp" alt="SwarmMarket" className="w-10 h-10" />
+          <span className="font-mono font-bold text-white text-xl">SwarmMarket</span>
         </div>
 
-        {/* Navigation */}
-        <nav className="flex items-center" style={{ gap: '40px' }}>
-          <a href="#" className="font-medium text-[#94A3B8] hover:text-white transition-colors" style={{ fontSize: '14px' }}>
+        {/* Desktop Navigation */}
+        <nav className="hidden lg:flex items-center gap-10">
+          <a href="#" className="font-medium text-[#94A3B8] hover:text-white transition-colors text-sm">
             Marketplace
           </a>
-          <a href="#" className="font-medium text-[#94A3B8] hover:text-white transition-colors" style={{ fontSize: '14px' }}>
+          <a href="#" className="font-medium text-[#94A3B8] hover:text-white transition-colors text-sm">
             For Agents
           </a>
-          <a href="#" className="font-medium text-[#94A3B8] hover:text-white transition-colors" style={{ fontSize: '14px' }}>
+          <a href="#" className="font-medium text-[#94A3B8] hover:text-white transition-colors text-sm">
             Developers
           </a>
-          <a href="#" className="font-medium text-[#94A3B8] hover:text-white transition-colors" style={{ fontSize: '14px' }}>
+          <a href="#" className="font-medium text-[#94A3B8] hover:text-white transition-colors text-sm">
             Documentation
           </a>
         </nav>
 
-        {/* CTA Section */}
-        <div className="flex items-center" style={{ gap: '16px' }}>
-          <a href="#" className="font-medium text-white hover:text-[#22D3EE] transition-colors" style={{ fontSize: '14px' }}>
+        {/* Desktop CTA Section */}
+        <div className="hidden lg:flex items-center gap-5">
+          {/* GitHub Stars */}
+          <a
+            href="#"
+            className="flex items-center gap-2 rounded-md hover:border-[#64748B] transition-colors"
+            style={{ border: '1px solid #475569', padding: '8px 12px' }}
+          >
+            <Github className="w-4 h-4 text-white" />
+            <Star className="w-3.5 h-3.5 text-[#F59E0B]" fill="#F59E0B" />
+            <span className="text-white text-sm font-medium">2.4k</span>
+          </a>
+          <a href="#" className="font-medium text-white hover:text-[#22D3EE] transition-colors text-sm">
             Sign In
           </a>
           <a
             href="#"
-            className="flex items-center justify-center bg-[#22D3EE] font-semibold text-[#0A0F1C] hover:opacity-90 transition-opacity"
-            style={{ padding: '12px 24px', borderRadius: '6px', fontSize: '14px' }}
+            className="flex items-center justify-center font-semibold text-[#0A0F1C] rounded-md text-sm"
+            style={{ background: 'linear-gradient(90deg, #22D3EE, #A855F7, #EC4899)', padding: '12px 24px' }}
           >
             Get Started
           </a>
         </div>
+
+        {/* Mobile Menu Button */}
+        <button
+          className="lg:hidden text-white p-2"
+          onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+        >
+          {mobileMenuOpen ? <X size={24} /> : <Menu size={24} />}
+        </button>
       </div>
+
+      {/* Mobile Menu */}
+      {mobileMenuOpen && (
+        <div className="lg:hidden bg-[#0A0F1C] border-t border-[#1E293B] px-8 py-4">
+          <nav className="flex flex-col gap-4">
+            <a href="#" className="font-medium text-[#94A3B8] hover:text-white transition-colors text-sm">
+              Marketplace
+            </a>
+            <a href="#" className="font-medium text-[#94A3B8] hover:text-white transition-colors text-sm">
+              For Agents
+            </a>
+            <a href="#" className="font-medium text-[#94A3B8] hover:text-white transition-colors text-sm">
+              Developers
+            </a>
+            <a href="#" className="font-medium text-[#94A3B8] hover:text-white transition-colors text-sm">
+              Documentation
+            </a>
+            <div className="flex flex-col gap-3 pt-4 border-t border-[#1E293B]">
+              <a href="#" className="font-medium text-white hover:text-[#22D3EE] transition-colors text-sm">
+                Sign In
+              </a>
+              <a
+                href="#"
+                className="flex items-center justify-center font-semibold text-[#0A0F1C] rounded-md text-sm"
+                style={{ background: 'linear-gradient(90deg, #22D3EE, #A855F7, #EC4899)', padding: '12px 24px' }}
+              >
+                Get Started
+              </a>
+            </div>
+          </nav>
+        </div>
+      )}
     </header>
   );
 }
