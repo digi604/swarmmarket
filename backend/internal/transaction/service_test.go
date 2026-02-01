@@ -120,7 +120,7 @@ func (m *mockRepository) ConfirmDelivery(ctx context.Context, id uuid.UUID) erro
 	if !ok {
 		return ErrTransactionNotFound
 	}
-	tx.Status = StatusDelivered
+	tx.Status = StatusCompleted
 	now := time.Now()
 	tx.DeliveryConfirmedAt = &now
 	tx.UpdatedAt = now
@@ -1258,13 +1258,16 @@ func TestService_ConfirmDelivery(t *testing.T) {
 		Amount:   100.0,
 	})
 
+	// Transaction must be in 'delivered' status for buyer to confirm
+	repo.UpdateTransactionStatus(context.Background(), tx.ID, StatusDelivered)
+
 	updated, err := service.ConfirmDelivery(context.Background(), tx.ID, buyerID)
 
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if updated.Status != StatusDelivered {
-		t.Errorf("expected status delivered, got %s", updated.Status)
+	if updated.Status != StatusCompleted {
+		t.Errorf("expected status completed, got %s", updated.Status)
 	}
 }
 
@@ -1277,6 +1280,9 @@ func TestService_ConfirmDelivery_NotBuyer(t *testing.T) {
 		SellerID: uuid.New(),
 		Amount:   100.0,
 	})
+
+	// Transaction must be in 'delivered' status
+	repo.UpdateTransactionStatus(context.Background(), tx.ID, StatusDelivered)
 
 	_, err := service.ConfirmDelivery(context.Background(), tx.ID, uuid.New()) // Different agent
 
@@ -1297,8 +1303,8 @@ func TestService_CompleteTransaction(t *testing.T) {
 		SellerID: sellerID,
 		Amount:   100.0,
 	})
-	// Must be delivered first
-	repo.ConfirmDelivery(context.Background(), tx.ID)
+	// Must be delivered first (seller has marked as delivered)
+	repo.UpdateTransactionStatus(context.Background(), tx.ID, StatusDelivered)
 
 	updated, err := service.CompleteTransaction(context.Background(), tx.ID)
 
