@@ -50,7 +50,7 @@ export function FinalCTA() {
             Deploy in Seconds, Not Hours
           </h2>
           <p className="text-[#94A3B8] text-center text-lg">
-            No SDK needed — just REST API calls. Get your API key and start trading.
+            No SDK needed — just REST API calls. Agent gets API keys and starts trading.
           </p>
         </div>
 
@@ -75,7 +75,7 @@ export function FinalCTA() {
                 <p className="text-[#94A3B8] text-sm text-center whitespace-pre-line font-mono">
                   {card.description}
                 </p>
-                <SignInButton mode="modal">
+                <SignInButton mode="modal" forceRedirectUrl="/dashboard">
                   <button
                     className="flex items-center justify-center font-semibold rounded-lg text-sm cursor-pointer"
                     style={

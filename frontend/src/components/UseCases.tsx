@@ -1,4 +1,6 @@
 import { Store, TrendingUp, Pizza, ArrowRight } from 'lucide-react';
+import { SignInButton, useAuth } from '@clerk/clerk-react';
+import { Link } from 'react-router-dom';
 
 const useCases = [
   {
@@ -9,6 +11,7 @@ const useCases = [
     cta: 'Start Selling',
     iconColor: '#22D3EE',
     ctaColor: '#22D3EE',
+    image: '/landingpage/drone.webp',
   },
   {
     icon: TrendingUp,
@@ -18,6 +21,7 @@ const useCases = [
     cta: 'Start Earning',
     iconColor: '#A855F7',
     ctaColor: '#A855F7',
+    image: '/landingpage/container.webp',
   },
   {
     icon: Pizza,
@@ -27,8 +31,61 @@ const useCases = [
     cta: 'Browse Services',
     iconColor: '#F59E0B',
     ctaColor: '#F59E0B',
+    image: '/landingpage/pizza.webp',
+    link: '/marketplace',
   },
 ];
+
+interface UseCase {
+  icon: React.ElementType;
+  title: string;
+  description: string;
+  cta: string;
+  iconColor: string;
+  ctaColor: string;
+  image: string;
+  link?: string;
+}
+
+function CtaButton({ useCase }: { useCase: UseCase }) {
+  const { isSignedIn } = useAuth();
+
+  const buttonContent = (
+    <>
+      {useCase.cta}
+      <ArrowRight className="w-4 h-4" strokeWidth={2} />
+    </>
+  );
+
+  const buttonClass = "flex items-center gap-2 font-semibold text-sm hover:opacity-80 transition-opacity cursor-pointer";
+
+  // If it has a specific link (like marketplace), use that
+  if (useCase.link) {
+    return (
+      <Link to={useCase.link} className={buttonClass} style={{ color: useCase.ctaColor }}>
+        {buttonContent}
+      </Link>
+    );
+  }
+
+  // If signed in, go directly to dashboard
+  if (isSignedIn) {
+    return (
+      <Link to="/dashboard" className={buttonClass} style={{ color: useCase.ctaColor }}>
+        {buttonContent}
+      </Link>
+    );
+  }
+
+  // Not signed in, show sign in button
+  return (
+    <SignInButton mode="modal" forceRedirectUrl="/dashboard">
+      <button className={buttonClass} style={{ color: useCase.ctaColor }}>
+        {buttonContent}
+      </button>
+    </SignInButton>
+  );
+}
 
 export function UseCases() {
   return (
@@ -50,17 +107,29 @@ export function UseCases() {
             const Icon = useCase.icon;
             return (
               <div key={index} className="flex flex-col gap-5">
-                <Icon className="w-16 h-16" style={{ color: useCase.iconColor }} strokeWidth={1.5} />
+                <div className="relative w-full h-48 rounded-xl overflow-hidden">
+                  <img
+                    src={useCase.image}
+                    alt={useCase.title}
+                    className="w-full h-full object-cover"
+                  />
+                  <div
+                    className="absolute top-0 left-0"
+                    style={{
+                      width: 0,
+                      height: 0,
+                      borderTop: `80px solid ${useCase.iconColor}`,
+                      borderRight: '80px solid transparent',
+                    }}
+                  />
+                  <Icon
+                    className="absolute top-3 left-3 w-6 h-6 text-[#0A0F1C]"
+                    strokeWidth={2}
+                  />
+                </div>
                 <h3 className="font-bold text-white text-2xl">{useCase.title}</h3>
                 <p className="text-[#94A3B8] text-base leading-relaxed">{useCase.description}</p>
-                <a
-                  href="#"
-                  className="flex items-center gap-2 font-semibold text-sm hover:opacity-80 transition-opacity"
-                  style={{ color: useCase.ctaColor }}
-                >
-                  {useCase.cta}
-                  <ArrowRight className="w-4 h-4" strokeWidth={2} />
-                </a>
+                <CtaButton useCase={useCase} />
               </div>
             );
           })}
