@@ -1,4 +1,5 @@
-import { UserButton } from '@clerk/clerk-react';
+import { useState } from 'react';
+import { UserButton, useUser } from '@clerk/clerk-react';
 import {
   LayoutDashboard,
   Bot,
@@ -10,10 +11,13 @@ import {
   Plus,
   Star,
   ArrowUp,
-  Check,
-  Zap,
-  MessageSquare,
+  X,
+  Loader2,
+  AlertCircle,
+  CheckCircle,
 } from 'lucide-react';
+import { useApiSetup, useOwnedAgents, useClaimAgent } from '../hooks/useDashboard';
+import type { Agent } from '../lib/api';
 
 const navItems = [
   { icon: LayoutDashboard, label: 'Dashboard', active: true },
@@ -24,110 +28,258 @@ const navItems = [
   { icon: Settings, label: 'Settings', active: false },
 ];
 
-const agents = [
-  {
-    name: 'DataCruncher-X1',
-    description: 'Data analysis & reporting',
-    status: 'Online',
-    score: '0.96',
-    color: '#22D3EE',
-  },
-  {
-    name: 'ShopperBot-3',
-    description: 'E-commerce & price comparison',
-    status: 'Online',
-    score: '0.91',
-    color: '#A855F7',
-  },
-  {
-    name: 'ResearchPro-7',
-    description: 'Web research & summarization',
-    status: 'Idle',
-    score: '0.88',
-    color: '#F59E0B',
-  },
-];
+function ClaimAgentModal({
+  isOpen,
+  onClose,
+  onSuccess,
+}: {
+  isOpen: boolean;
+  onClose: () => void;
+  onSuccess: () => void;
+}) {
+  const [token, setToken] = useState('');
+  const { claimAgent, loading, error, clearError } = useClaimAgent();
+  const [success, setSuccess] = useState(false);
 
-const tasks = [
-  {
-    name: 'Analyze Q4 sales data',
-    agent: 'DataCruncher-X1',
-    status: 'In Progress',
-    statusColor: '#22C55E',
-    price: '$12.00',
-    priceColor: '#22C55E',
-    time: '2h ago',
-  },
-  {
-    name: 'Find best flight deals to NYC',
-    agent: 'ShopperBot-3',
-    status: 'Pending',
-    statusColor: '#F59E0B',
-    price: '$8.50',
-    priceColor: '#F59E0B',
-    time: '5h ago',
-  },
-  {
-    name: 'Research competitor pricing',
-    agent: 'ResearchPro-7',
-    status: 'Completed',
-    statusColor: '#22D3EE',
-    price: '$15.00',
-    priceColor: '#22D3EE',
-    time: '1d ago',
-  },
-];
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!token.trim()) return;
 
-const activities = [
-  {
-    icon: Check,
-    iconColor: '#22C55E',
-    bgColor: 'rgba(34, 197, 94, 0.125)',
-    text: 'DataCruncher-X1 completed task',
-    time: '2 minutes ago • +$4.50',
-  },
-  {
-    icon: Zap,
-    iconColor: '#22D3EE',
-    bgColor: 'rgba(34, 211, 238, 0.125)',
-    text: 'ShopperBot-3 found 12 deals',
-    time: '8 minutes ago',
-  },
-  {
-    icon: MessageSquare,
-    iconColor: '#A855F7',
-    bgColor: 'rgba(168, 85, 247, 0.125)',
-    text: 'New offer received from ByteBot',
-    time: '15 minutes ago',
-  },
-  {
-    icon: Star,
-    iconColor: '#F59E0B',
-    bgColor: 'rgba(245, 158, 11, 0.125)',
-    text: 'ResearchPro-7 earned 5-star review',
-    time: '1 hour ago',
-  },
-  {
-    icon: Wallet,
-    iconColor: '#22C55E',
-    bgColor: 'rgba(34, 197, 94, 0.125)',
-    text: 'Withdrawal completed',
-    time: '3 hours ago • $250.00',
-  },
-];
+    try {
+      await claimAgent(token.trim());
+      setSuccess(true);
+      setTimeout(() => {
+        onSuccess();
+        onClose();
+        setToken('');
+        setSuccess(false);
+      }, 1500);
+    } catch {
+      // Error is handled by the hook
+    }
+  };
 
-const stats = [
-  { label: 'Active Agents', value: '3', change: '+1 this week', color: '#FFFFFF' },
-  { label: 'Tasks Completed', value: '127', change: '+23 today', color: '#FFFFFF' },
-  { label: 'Total Earnings', value: '$1,847', change: '+$312 this month', color: '#FFFFFF' },
-  { label: 'Reputation Score', value: '0.94', change: null, color: '#22D3EE', showStars: true },
-];
+  const handleClose = () => {
+    setToken('');
+    clearError();
+    setSuccess(false);
+    onClose();
+  };
+
+  if (!isOpen) return null;
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center">
+      <div className="absolute inset-0 bg-black/60" onClick={handleClose} />
+      <div className="relative bg-[#1E293B] rounded-2xl p-6 w-full max-w-md mx-4">
+        <button
+          onClick={handleClose}
+          className="absolute top-4 right-4 text-[#64748B] hover:text-white"
+        >
+          <X className="w-5 h-5" />
+        </button>
+
+        <h2 className="text-xl font-bold text-white mb-2">Verify Agent Ownership</h2>
+        <p className="text-sm text-[#94A3B8] mb-6">
+          Enter the ownership token from your agent to link it to your account.
+        </p>
+
+        {success ? (
+          <div className="flex flex-col items-center py-8">
+            <CheckCircle className="w-16 h-16 text-[#22C55E] mb-4" />
+            <p className="text-lg font-semibold text-white">Agent Claimed!</p>
+            <p className="text-sm text-[#94A3B8]">Your agent has been linked to your account.</p>
+          </div>
+        ) : (
+          <form onSubmit={handleSubmit}>
+            <div className="mb-4">
+              <label className="block text-sm font-medium text-[#94A3B8] mb-2">
+                Ownership Token
+              </label>
+              <input
+                type="text"
+                value={token}
+                onChange={(e) => setToken(e.target.value)}
+                placeholder="own_abc123..."
+                className="w-full px-4 py-3 bg-[#0F172A] border border-[#334155] rounded-lg text-white placeholder-[#64748B] focus:outline-none focus:border-[#22D3EE] font-mono text-sm"
+                disabled={loading}
+              />
+            </div>
+
+            {error && (
+              <div className="mb-4 flex items-center gap-2 text-red-400 text-sm">
+                <AlertCircle className="w-4 h-4" />
+                <span>{error}</span>
+              </div>
+            )}
+
+            <button
+              type="submit"
+              disabled={loading || !token.trim()}
+              className="w-full py-3 bg-[#22D3EE] text-[#0A0F1C] font-semibold rounded-lg hover:bg-[#06B6D4] transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+            >
+              {loading ? (
+                <>
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                  Verifying...
+                </>
+              ) : (
+                'Verify Ownership'
+              )}
+            </button>
+          </form>
+        )}
+
+        <p className="mt-4 text-xs text-[#64748B] text-center">
+          Get your token by calling{' '}
+          <code className="bg-[#0F172A] px-1.5 py-0.5 rounded">
+            POST /api/v1/agents/me/ownership-token
+          </code>
+        </p>
+      </div>
+    </div>
+  );
+}
+
+function AgentCard({ agent }: { agent: Agent }) {
+  const colors = ['#22D3EE', '#A855F7', '#F59E0B', '#22C55E', '#EC4899'];
+  const colorIndex = agent.name.charCodeAt(0) % colors.length;
+  const color = colors[colorIndex];
+
+  const status = agent.is_active ? 'Online' : 'Offline';
+  const lastSeen = agent.last_seen_at
+    ? new Date(agent.last_seen_at).toLocaleDateString()
+    : 'Never';
+
+  return (
+    <div
+      className="flex items-center justify-between rounded-xl bg-[#1E293B]"
+      style={{ padding: '16px' }}
+    >
+      <div className="flex items-center gap-3.5">
+        <div
+          className="w-11 h-11 rounded-full flex items-center justify-center"
+          style={{ backgroundColor: color }}
+        >
+          <Bot className="w-6 h-6 text-[#0A0F1C]" />
+        </div>
+        <div>
+          <p className="text-[15px] font-semibold text-white">{agent.name}</p>
+          <p className="text-xs text-[#64748B]">
+            {agent.description || `Last seen: ${lastSeen}`}
+          </p>
+        </div>
+      </div>
+      <div className="flex items-center gap-4">
+        <div
+          className="flex items-center gap-1.5 rounded-full"
+          style={{
+            padding: '4px 10px',
+            backgroundColor:
+              status === 'Online' ? 'rgba(34, 197, 94, 0.125)' : 'rgba(100, 116, 139, 0.125)',
+          }}
+        >
+          <div
+            className="w-1.5 h-1.5 rounded-full"
+            style={{
+              backgroundColor: status === 'Online' ? '#22C55E' : '#64748B',
+            }}
+          />
+          <span
+            className="text-[11px] font-medium"
+            style={{ color: status === 'Online' ? '#22C55E' : '#64748B' }}
+          >
+            {status}
+          </span>
+        </div>
+        <div className="flex items-center gap-1">
+          <Star className="w-3.5 h-3.5 text-[#F59E0B]" fill="#F59E0B" />
+          <span className="font-mono text-[13px] font-semibold text-[#F59E0B]">
+            {agent.trust_score.toFixed(2)}
+          </span>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function EmptyAgents({ onAddAgent }: { onAddAgent: () => void }) {
+  return (
+    <div className="flex flex-col items-center justify-center py-12 px-4 rounded-xl bg-[#1E293B]">
+      <div className="w-16 h-16 rounded-full bg-[#0F172A] flex items-center justify-center mb-4">
+        <Bot className="w-8 h-8 text-[#64748B]" />
+      </div>
+      <h3 className="text-lg font-semibold text-white mb-2">No agents yet</h3>
+      <p className="text-sm text-[#64748B] text-center mb-4 max-w-sm">
+        Link your AI agents to track their performance, earnings, and activity in real-time.
+      </p>
+      <button
+        onClick={onAddAgent}
+        className="flex items-center gap-1.5 rounded-md bg-[#22D3EE] text-[#0A0F1C] font-semibold text-[13px] hover:bg-[#06B6D4] transition-colors"
+        style={{ padding: '8px 16px' }}
+      >
+        <Plus className="w-4 h-4" />
+        Verify Your First Agent
+      </button>
+    </div>
+  );
+}
 
 export function Dashboard() {
+  const { user } = useUser();
+  const [showClaimModal, setShowClaimModal] = useState(false);
+
+  // Initialize API with Clerk token
+  useApiSetup();
+
+  // Fetch owned agents
+  const { agents, loading: agentsLoading, refetch: refetchAgents } = useOwnedAgents();
+
+  // Calculate stats from real data
+  const stats = [
+    {
+      label: 'Active Agents',
+      value: agents.filter((a) => a.is_active).length.toString(),
+      change: `${agents.length} total`,
+      color: '#FFFFFF',
+    },
+    {
+      label: 'Total Transactions',
+      value: agents.reduce((sum, a) => sum + a.total_transactions, 0).toString(),
+      change: null,
+      color: '#FFFFFF',
+    },
+    {
+      label: 'Avg Trust Score',
+      value:
+        agents.length > 0
+          ? (agents.reduce((sum, a) => sum + a.trust_score, 0) / agents.length).toFixed(2)
+          : '0.00',
+      change: null,
+      color: '#22D3EE',
+      showStars: true,
+    },
+    {
+      label: 'Avg Rating',
+      value:
+        agents.length > 0
+          ? (agents.reduce((sum, a) => sum + a.average_rating, 0) / agents.length).toFixed(1)
+          : '0.0',
+      change: null,
+      color: '#F59E0B',
+      showStars: true,
+    },
+  ];
+
+  const firstName = user?.firstName || 'there';
+
   return (
     <div className="flex h-screen w-full bg-[#0A0F1C]">
       {/* Sidebar */}
-      <aside className="w-[260px] h-full bg-[#0F172A] flex flex-col" style={{ padding: '24px 20px' }}>
+      <aside
+        className="w-[260px] h-full bg-[#0F172A] flex flex-col"
+        style={{ padding: '24px 20px' }}
+      >
         {/* Logo */}
         <div className="flex items-center gap-2.5 mb-8">
           <img src="/logo.webp" alt="SwarmMarket" className="w-8 h-8" />
@@ -168,7 +320,7 @@ export function Dashboard() {
         {/* Header */}
         <div className="flex items-center justify-between mb-8">
           <div>
-            <h1 className="text-[28px] font-bold text-white">Welcome back, Alex</h1>
+            <h1 className="text-[28px] font-bold text-white">Welcome back, {firstName}</h1>
             <p className="text-sm text-[#64748B]">Here's what your agents have been up to</p>
           </div>
           <div className="flex items-center gap-4">
@@ -200,161 +352,62 @@ export function Dashboard() {
               {stat.showStars ? (
                 <div className="flex gap-0.5">
                   {[...Array(5)].map((_, i) => (
-                    <Star key={i} className="w-3.5 h-3.5 text-[#F59E0B]" fill="#F59E0B" />
+                    <Star
+                      key={i}
+                      className="w-3.5 h-3.5"
+                      style={{
+                        color: i < Math.round(parseFloat(stat.value)) ? '#F59E0B' : '#334155',
+                      }}
+                      fill={i < Math.round(parseFloat(stat.value)) ? '#F59E0B' : '#334155'}
+                    />
                   ))}
                 </div>
-              ) : (
+              ) : stat.change ? (
                 <div className="flex items-center gap-1">
                   <ArrowUp className="w-3.5 h-3.5 text-[#22C55E]" />
                   <span className="text-xs text-[#22C55E]">{stat.change}</span>
                 </div>
-              )}
+              ) : null}
             </div>
           ))}
         </div>
 
-        {/* Content Row */}
-        <div className="flex gap-6 h-[calc(100%-220px)]">
-          {/* Left Column */}
-          <div className="flex-1 flex flex-col gap-6">
-            {/* My Agents Section */}
-            <div className="flex flex-col gap-5">
-              <div className="flex items-center justify-between">
-                <h2 className="text-lg font-semibold text-white">My Agents</h2>
-                <button
-                  className="flex items-center gap-1.5 rounded-md bg-[#22D3EE] text-[#0A0F1C] font-semibold text-[13px] hover:bg-[#06B6D4] transition-colors"
-                  style={{ padding: '8px 16px' }}
-                >
-                  <Plus className="w-4 h-4" />
-                  Verify Agent
-                </button>
-              </div>
-              <div className="flex flex-col gap-3">
-                {agents.map((agent, index) => (
-                  <div
-                    key={index}
-                    className="flex items-center justify-between rounded-xl bg-[#1E293B]"
-                    style={{ padding: '16px' }}
-                  >
-                    <div className="flex items-center gap-3.5">
-                      <div
-                        className="w-11 h-11 rounded-full flex items-center justify-center"
-                        style={{ backgroundColor: agent.color }}
-                      >
-                        <Bot className="w-6 h-6 text-[#0A0F1C]" />
-                      </div>
-                      <div>
-                        <p className="text-[15px] font-semibold text-white">{agent.name}</p>
-                        <p className="text-xs text-[#64748B]">{agent.description}</p>
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-4">
-                      <div
-                        className="flex items-center gap-1.5 rounded-full"
-                        style={{
-                          padding: '4px 10px',
-                          backgroundColor:
-                            agent.status === 'Online'
-                              ? 'rgba(34, 197, 94, 0.125)'
-                              : 'rgba(100, 116, 139, 0.125)',
-                        }}
-                      >
-                        <div
-                          className="w-1.5 h-1.5 rounded-full"
-                          style={{
-                            backgroundColor: agent.status === 'Online' ? '#22C55E' : '#64748B',
-                          }}
-                        />
-                        <span
-                          className="text-[11px] font-medium"
-                          style={{ color: agent.status === 'Online' ? '#22C55E' : '#64748B' }}
-                        >
-                          {agent.status}
-                        </span>
-                      </div>
-                      <div className="flex items-center gap-1">
-                        <Star className="w-3.5 h-3.5 text-[#F59E0B]" fill="#F59E0B" />
-                        <span className="font-mono text-[13px] font-semibold text-[#F59E0B]">
-                          {agent.score}
-                        </span>
-                      </div>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            {/* Tasks Section */}
-            <div className="flex flex-col gap-5">
-              <div className="flex items-center justify-between">
-                <h2 className="text-lg font-semibold text-white">Recent & Open Tasks</h2>
-                <button
-                  className="flex items-center gap-1.5 rounded-md bg-[#A855F7] text-white font-semibold text-[13px] hover:bg-[#9333EA] transition-colors"
-                  style={{ padding: '8px 16px' }}
-                >
-                  <Plus className="w-4 h-4" />
-                  New Task
-                </button>
-              </div>
-              <div className="flex flex-col gap-2.5">
-                {tasks.map((task, index) => (
-                  <div
-                    key={index}
-                    className="flex items-center justify-between rounded-xl bg-[#1E293B]"
-                    style={{ padding: '14px 16px' }}
-                  >
-                    <div className="flex items-center gap-3.5">
-                      <div
-                        className="w-2.5 h-2.5 rounded"
-                        style={{ backgroundColor: task.statusColor }}
-                      />
-                      <div>
-                        <p className="text-sm font-medium text-white">{task.name}</p>
-                        <p className="text-xs text-[#64748B]">
-                          {task.agent} • {task.status}
-                        </p>
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-3">
-                      <span
-                        className="font-mono text-[13px] font-semibold"
-                        style={{ color: task.priceColor }}
-                      >
-                        {task.price}
-                      </span>
-                      <span className="text-xs text-[#64748B]">{task.time}</span>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
+        {/* My Agents Section */}
+        <div className="flex flex-col gap-5">
+          <div className="flex items-center justify-between">
+            <h2 className="text-lg font-semibold text-white">My Agents</h2>
+            <button
+              onClick={() => setShowClaimModal(true)}
+              className="flex items-center gap-1.5 rounded-md bg-[#22D3EE] text-[#0A0F1C] font-semibold text-[13px] hover:bg-[#06B6D4] transition-colors"
+              style={{ padding: '8px 16px' }}
+            >
+              <Plus className="w-4 h-4" />
+              Verify Agent
+            </button>
           </div>
 
-          {/* Activity Section */}
-          <div className="w-[360px] flex flex-col gap-5">
-            <h2 className="text-lg font-semibold text-white">Recent Activity</h2>
-            <div className="flex flex-col gap-4">
-              {activities.map((activity, index) => {
-                const Icon = activity.icon;
-                return (
-                  <div key={index} className="flex items-start gap-3">
-                    <div
-                      className="w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0"
-                      style={{ backgroundColor: activity.bgColor }}
-                    >
-                      <Icon className="w-[18px] h-[18px]" style={{ color: activity.iconColor }} />
-                    </div>
-                    <div>
-                      <p className="text-[13px] text-white">{activity.text}</p>
-                      <p className="text-[11px] text-[#64748B]">{activity.time}</p>
-                    </div>
-                  </div>
-                );
-              })}
+          {agentsLoading ? (
+            <div className="flex items-center justify-center py-12">
+              <Loader2 className="w-8 h-8 text-[#22D3EE] animate-spin" />
             </div>
-          </div>
+          ) : agents.length === 0 ? (
+            <EmptyAgents onAddAgent={() => setShowClaimModal(true)} />
+          ) : (
+            <div className="flex flex-col gap-3">
+              {agents.map((agent) => (
+                <AgentCard key={agent.id} agent={agent} />
+              ))}
+            </div>
+          )}
         </div>
       </main>
+
+      {/* Claim Agent Modal */}
+      <ClaimAgentModal
+        isOpen={showClaimModal}
+        onClose={() => setShowClaimModal(false)}
+        onSuccess={refetchAgents}
+      />
     </div>
   );
 }
