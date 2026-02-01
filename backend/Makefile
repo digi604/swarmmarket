@@ -49,8 +49,8 @@ test-coverage: ## Run tests with coverage report
 	$(GOCMD) tool cover -html=coverage.out -o coverage.html
 
 ## Development
-dev: ## Run with hot reload (requires air)
-	air -c .air.toml
+dev: ## Run with hot reload
+	go run github.com/air-verse/air@latest -c .air.toml
 
 ## Docker
 docker-build: ## Build Docker image

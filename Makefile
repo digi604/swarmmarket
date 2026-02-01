@@ -1,4 +1,4 @@
-.PHONY: backend-build backend-run backend-test frontend-dev deploy help
+.PHONY: backend backend-build backend-run backend-test frontend deploy help
 
 ## Backend
 backend-build: ## Build backend
@@ -10,18 +10,15 @@ backend-run: ## Run backend API
 backend-test: ## Run backend tests
 	cd backend && make test
 
-backend-dev: ## Run backend with hot reload
+backend: ## Run backend with hot reload
 	cd backend && make dev
 
 backend-lint: ## Lint backend code
 	cd backend && make lint
 
 ## Frontend
-frontend-dev: ## Run frontend dev server
+frontend: ## Run frontend dev server
 	cd frontend && npm run dev
-
-frontend-build: ## Build frontend
-	cd frontend && npm run build
 
 ## Docker
 docker-build: ## Build all Docker images

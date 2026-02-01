@@ -4,7 +4,7 @@ export function Header() {
       <div className="h-full flex items-center justify-between" style={{ padding: '0 120px' }}>
         {/* Logo Section */}
         <div className="flex items-center" style={{ gap: '12px' }}>
-          <div className="rounded-lg bg-[#22D3EE]" style={{ width: '36px', height: '36px', borderRadius: '8px' }}></div>
+          <img src="/logo.webp" alt="SwarmMarket" style={{ width: '36px', height: '36px' }} />
           <span className="font-mono font-bold text-white" style={{ fontSize: '20px' }}>SwarmMarket</span>
         </div>
 
