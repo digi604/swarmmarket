@@ -27,11 +27,18 @@ type PaymentService interface {
 	RefundPayment(ctx context.Context, paymentIntentID string) error
 }
 
+// TrustHandler handles trust score updates.
+type TrustHandler interface {
+	OnTransactionCompleted(ctx context.Context, agentID uuid.UUID, transactionID uuid.UUID) error
+	OnRatingReceived(ctx context.Context, agentID uuid.UUID, ratingScore int, transactionID uuid.UUID) error
+}
+
 // Service handles transaction business logic.
 type Service struct {
 	repo      RepositoryInterface
 	publisher EventPublisher
 	payment   PaymentService
+	trust     TrustHandler
 }
 
 // NewService creates a new transaction service.
@@ -45,6 +52,11 @@ func NewService(repo RepositoryInterface, publisher EventPublisher) *Service {
 // SetPaymentService sets the payment service (optional, for escrow).
 func (s *Service) SetPaymentService(payment PaymentService) {
 	s.payment = payment
+}
+
+// SetTrustHandler sets the trust handler (optional, for trust score updates).
+func (s *Service) SetTrustHandler(trust TrustHandler) {
+	s.trust = trust
 }
 
 // CreateFromOffer creates a transaction from an accepted offer (implements marketplace.TransactionCreator).
@@ -232,8 +244,8 @@ func (s *Service) ConfirmDelivery(ctx context.Context, transactionID, agentID uu
 		return nil, ErrNotAuthorized
 	}
 
-	// Check status - must be pending or escrow_funded
-	if tx.Status != StatusPending && tx.Status != StatusEscrowFunded {
+	// Check status - must be delivered (seller has marked it as delivered)
+	if tx.Status != StatusDelivered {
 		return nil, ErrInvalidStatus
 	}
 
@@ -246,7 +258,7 @@ func (s *Service) ConfirmDelivery(ctx context.Context, transactionID, agentID uu
 	tx, _ = s.repo.GetTransactionByID(ctx, transactionID)
 
 	// Publish event
-	s.publishEvent(ctx, "transaction.delivered", map[string]any{
+	s.publishEvent(ctx, "transaction.completed", map[string]any{
 		"transaction_id": transactionID,
 		"buyer_id":       tx.BuyerID,
 		"seller_id":      tx.SellerID,
@@ -291,6 +303,12 @@ func (s *Service) CompleteTransaction(ctx context.Context, transactionID uuid.UU
 	// Update agent stats
 	s.repo.UpdateAgentStats(ctx, tx.BuyerID, true)
 	s.repo.UpdateAgentStats(ctx, tx.SellerID, true)
+
+	// Update trust scores (async)
+	if s.trust != nil {
+		go s.trust.OnTransactionCompleted(context.Background(), tx.BuyerID, transactionID)
+		go s.trust.OnTransactionCompleted(context.Background(), tx.SellerID, transactionID)
+	}
 
 	// Get updated transaction
 	tx, _ = s.repo.GetTransactionByID(ctx, transactionID)
@@ -358,6 +376,11 @@ func (s *Service) SubmitRating(ctx context.Context, transactionID, raterID uuid.
 
 	// Recalculate rated agent's average rating
 	s.repo.RecalculateAgentRating(ctx, ratedAgentID)
+
+	// Update trust score for rated agent (async)
+	if s.trust != nil {
+		go s.trust.OnRatingReceived(context.Background(), ratedAgentID, req.Score, transactionID)
+	}
 
 	// If transaction was delivered and both parties have rated, complete it
 	if tx.Status == StatusDelivered {

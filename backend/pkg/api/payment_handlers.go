@@ -3,6 +3,7 @@ package api
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"io"
 	"net/http"
 
@@ -34,6 +35,7 @@ func NewPaymentHandler(paymentService *payment.Service, transactionService *tran
 // CreatePaymentRequest is the request body for creating a payment.
 type CreatePaymentIntentRequest struct {
 	TransactionID string `json:"transaction_id"`
+	ReturnURL     string `json:"return_url"` // URL to redirect after payment confirmation
 }
 
 // CreatePaymentIntent handles POST /payments/intent - create payment intent for escrow.
@@ -80,6 +82,7 @@ func (h *PaymentHandler) CreatePaymentIntent(w http.ResponseWriter, r *http.Requ
 		SellerID:      tx.SellerID,
 		Amount:        tx.Amount,
 		Currency:      tx.Currency,
+		ReturnURL:     req.ReturnURL,
 	})
 	if err != nil {
 		common.WriteError(w, http.StatusInternalServerError, common.ErrInternalServer("failed to create payment"))
@@ -121,8 +124,12 @@ func (h *PaymentHandler) HandleWebhook(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Verify webhook signature
-	event, err := webhook.ConstructEvent(body, r.Header.Get("Stripe-Signature"), h.webhookSecret)
+	sig := r.Header.Get("Stripe-Signature")
+	event, err := webhook.ConstructEventWithOptions(body, sig, h.webhookSecret, webhook.ConstructEventOptions{
+		IgnoreAPIVersionMismatch: true,
+	})
 	if err != nil {
+		fmt.Printf("[Stripe Webhook] Signature verification error: %v\n", err)
 		common.WriteError(w, http.StatusBadRequest, common.ErrBadRequest("invalid signature"))
 		return
 	}

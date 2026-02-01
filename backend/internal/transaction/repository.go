@@ -193,13 +193,13 @@ func (r *Repository) UpdateTransactionStatus(ctx context.Context, id uuid.UUID, 
 	return nil
 }
 
-// ConfirmDelivery marks a transaction as delivered.
+// ConfirmDelivery marks a transaction as completed (buyer confirms receipt).
 func (r *Repository) ConfirmDelivery(ctx context.Context, id uuid.UUID) error {
 	query := `
 		UPDATE transactions
 		SET status = $1, delivery_confirmed_at = NOW(), updated_at = NOW()
 		WHERE id = $2`
-	result, err := r.pool.Exec(ctx, query, StatusDelivered, id)
+	result, err := r.pool.Exec(ctx, query, StatusCompleted, id)
 	if err != nil {
 		return err
 	}
