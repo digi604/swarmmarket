@@ -19,7 +19,9 @@ import (
 	"github.com/digi604/swarmmarket/backend/internal/notification"
 	"github.com/digi604/swarmmarket/backend/internal/payment"
 	"github.com/digi604/swarmmarket/backend/internal/transaction"
+	"github.com/digi604/swarmmarket/backend/internal/trust"
 	"github.com/digi604/swarmmarket/backend/internal/user"
+	"github.com/digi604/swarmmarket/backend/internal/wallet"
 	"github.com/digi604/swarmmarket/backend/pkg/middleware"
 	"github.com/digi604/swarmmarket/backend/pkg/websocket"
 )
@@ -34,6 +36,8 @@ type RouterConfig struct {
 	AuctionService     *auction.Service
 	MatchingEngine     *matching.Engine
 	PaymentService     *payment.Service
+	TrustService       *trust.Service
+	WalletService      *wallet.Service
 	WebhookRepo        *notification.Repository
 	WebSocketHub       *websocket.Hub
 	UserService        *user.Service
@@ -74,7 +78,13 @@ func NewRouter(cfg RouterConfig) *chi.Mux {
 	auctionHandler := NewAuctionHandler(cfg.AuctionService)
 	webhookHandler := NewWebhookHandler(cfg.WebhookRepo)
 	orderBookHandler := NewOrderBookHandler(cfg.MatchingEngine)
-	paymentHandler := NewPaymentHandler(cfg.PaymentService, cfg.TransactionService, cfg.Config.Stripe.WebhookSecret)
+	paymentHandler := NewPaymentHandler(cfg.PaymentService, cfg.TransactionService, cfg.WalletService, cfg.Config.Stripe.WebhookSecret)
+
+	// Trust handler (optional - only if TrustService is configured)
+	var trustHandler *TrustHandler
+	if cfg.TrustService != nil {
+		trustHandler = NewTrustHandler(cfg.TrustService)
+	}
 
 	// Auth middleware for agents (API key)
 	authMiddleware := middleware.Auth(cfg.AgentService, cfg.Config.Auth.APIKeyHeader)
@@ -116,6 +126,12 @@ func NewRouter(cfg RouterConfig) *chi.Mux {
 			r.With(optionalAuth).Get("/{id}", agentHandler.GetByID)
 			r.With(optionalAuth).Get("/{id}/reputation", agentHandler.GetReputation)
 
+			// Trust endpoints (public - anyone can view trust breakdown and history)
+			if trustHandler != nil {
+				r.With(optionalAuth).Get("/{id}/trust", trustHandler.GetAgentTrustBreakdown)
+				r.With(optionalAuth).Get("/{id}/trust/history", trustHandler.GetTrustHistory)
+			}
+
 			// Authenticated endpoints
 			r.Group(func(r chi.Router) {
 				r.Use(authMiddleware)
@@ -125,6 +141,17 @@ func NewRouter(cfg RouterConfig) *chi.Mux {
 			})
 		})
 
+		// Trust verification routes (authenticated)
+		if trustHandler != nil {
+			r.Route("/trust", func(r chi.Router) {
+				r.Use(authMiddleware)
+				r.Get("/breakdown", trustHandler.GetTrustBreakdown)
+				r.Get("/verifications", trustHandler.ListVerifications)
+				r.Post("/verify/twitter/initiate", trustHandler.InitiateTwitterVerification)
+				r.Post("/verify/twitter/confirm", trustHandler.ConfirmTwitterVerification)
+			})
+		}
+
 		// Dashboard routes for human users (Clerk auth)
 		if dashboardHandler != nil && clerkMiddleware != nil {
 			r.Route("/dashboard", func(r chi.Router) {
@@ -133,6 +160,16 @@ func NewRouter(cfg RouterConfig) *chi.Mux {
 				r.Get("/agents", dashboardHandler.ListOwnedAgents)
 				r.Get("/agents/{id}/metrics", dashboardHandler.GetAgentMetrics)
 				r.Post("/agents/claim", dashboardHandler.ClaimAgentOwnership)
+
+				// Wallet routes
+				if cfg.WalletService != nil {
+					walletHandler := NewWalletHandler(cfg.WalletService)
+					r.Route("/wallet", func(r chi.Router) {
+						r.Get("/balance", walletHandler.GetBalance)
+						r.Get("/deposits", walletHandler.GetDeposits)
+						r.Post("/deposit", walletHandler.CreateDeposit)
+					})
+				}
 			})
 		}
 
@@ -207,6 +244,17 @@ func NewRouter(cfg RouterConfig) *chi.Mux {
 			r.With(authMiddleware).Post("/intent", paymentHandler.CreatePaymentIntent)
 			r.With(authMiddleware).Get("/{paymentIntentId}", paymentHandler.GetPaymentStatus)
 		})
+
+		// Agent wallet routes
+		if cfg.WalletService != nil {
+			agentWalletHandler := NewAgentWalletHandler(cfg.WalletService)
+			r.Route("/wallet", func(r chi.Router) {
+				r.Use(authMiddleware)
+				r.Get("/balance", agentWalletHandler.GetBalance)
+				r.Get("/deposits", agentWalletHandler.GetDeposits)
+				r.Post("/deposit", agentWalletHandler.CreateDeposit)
+			})
+		}
 	})
 
 	// Stripe webhook (no auth - verified via signature)

@@ -13,6 +13,7 @@ import (
 	"github.com/digi604/swarmmarket/backend/internal/common"
 	"github.com/digi604/swarmmarket/backend/internal/payment"
 	"github.com/digi604/swarmmarket/backend/internal/transaction"
+	"github.com/digi604/swarmmarket/backend/internal/wallet"
 	"github.com/digi604/swarmmarket/backend/pkg/middleware"
 )
 
@@ -20,14 +21,16 @@ import (
 type PaymentHandler struct {
 	paymentService     *payment.Service
 	transactionService *transaction.Service
+	walletService      *wallet.Service
 	webhookSecret      string
 }
 
 // NewPaymentHandler creates a new payment handler.
-func NewPaymentHandler(paymentService *payment.Service, transactionService *transaction.Service, webhookSecret string) *PaymentHandler {
+func NewPaymentHandler(paymentService *payment.Service, transactionService *transaction.Service, walletService *wallet.Service, webhookSecret string) *PaymentHandler {
 	return &PaymentHandler{
 		paymentService:     paymentService,
 		transactionService: transactionService,
+		walletService:      walletService,
 		webhookSecret:      webhookSecret,
 	}
 }
@@ -163,7 +166,17 @@ func (h *PaymentHandler) handlePaymentSucceeded(ctx context.Context, data []byte
 		return
 	}
 
-	// Get transaction ID from metadata
+	// Check if this is a wallet deposit
+	if pi.Metadata["type"] == "wallet_deposit" {
+		if h.walletService != nil {
+			if err := h.walletService.HandlePaymentIntentSucceeded(ctx, pi.ID); err != nil {
+				fmt.Printf("[Stripe Webhook] Failed to handle wallet deposit: %v\n", err)
+			}
+		}
+		return
+	}
+
+	// Handle transaction payment
 	transactionIDStr, ok := pi.Metadata["transaction_id"]
 	if !ok {
 		return
@@ -183,13 +196,32 @@ func (h *PaymentHandler) handlePaymentSucceeded(ctx context.Context, data []byte
 
 func (h *PaymentHandler) handlePaymentFailed(ctx context.Context, data []byte) {
 	var pi struct {
-		ID       string            `json:"id"`
-		Metadata map[string]string `json:"metadata"`
+		ID                 string            `json:"id"`
+		Metadata           map[string]string `json:"metadata"`
+		LastPaymentError   *struct {
+			Message string `json:"message"`
+		} `json:"last_payment_error"`
 	}
 	if err := json.Unmarshal(data, &pi); err != nil {
 		return
 	}
 
+	failureReason := "payment failed"
+	if pi.LastPaymentError != nil && pi.LastPaymentError.Message != "" {
+		failureReason = pi.LastPaymentError.Message
+	}
+
+	// Check if this is a wallet deposit
+	if pi.Metadata["type"] == "wallet_deposit" {
+		if h.walletService != nil {
+			if err := h.walletService.HandlePaymentIntentFailed(ctx, pi.ID, failureReason); err != nil {
+				fmt.Printf("[Stripe Webhook] Failed to handle wallet deposit failure: %v\n", err)
+			}
+		}
+		return
+	}
+
+	// Handle transaction payment failure
 	transactionIDStr, ok := pi.Metadata["transaction_id"]
 	if !ok {
 		return
