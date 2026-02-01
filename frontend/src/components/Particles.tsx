@@ -13,7 +13,7 @@ interface Particle {
   trail: { x: number; y: number; alpha: number }[];
   waveOffset: number;
   waveAmplitude: number;
-  isSuper: boolean;
+  connectionRadius: number;
 }
 
 interface GravityPoint {
@@ -54,30 +54,6 @@ export function Particles() {
 
     const createParticle = (_: unknown, __?: number): Particle => {
       const type = Math.random();
-
-      // 3% chance for super particle
-      const isSuper = type < 0.03;
-
-      if (isSuper) {
-        const vx = (Math.random() - 0.5) * 0.8;
-        const vy = (Math.random() - 0.5) * 0.8;
-        return {
-          x: Math.random() * canvas.width,
-          y: Math.random() * canvas.height,
-          vx,
-          vy,
-          baseVx: vx,
-          baseVy: vy,
-          radius: Math.random() * 3 + 5,
-          color: COLORS[Math.floor(Math.random() * COLORS.length)],
-          alpha: 0.9,
-          trail: [],
-          waveOffset: Math.random() * Math.PI * 2,
-          waveAmplitude: Math.random() * 0.3 + 0.1,
-          isSuper: true,
-        };
-      }
-
       const baseSpeed = type < 0.15 ? 3 : type < 0.4 ? 2 : type < 0.7 ? 0.5 : 1.25;
       const vx = (Math.random() - 0.5) * baseSpeed;
       const vy = (Math.random() - 0.5) * baseSpeed;
@@ -87,6 +63,9 @@ export function Particles() {
 
       // Bigger particles are brighter: alpha scales with radius (0.1 to 0.7)
       const alpha = 0.1 + (radius / 5) * 0.6;
+
+      // Random connection radius for each particle (80-250px)
+      const connectionRadius = Math.random() * 170 + 80;
 
       return {
         x: Math.random() * canvas.width,
@@ -101,7 +80,7 @@ export function Particles() {
         trail: [],
         waveOffset: Math.random() * Math.PI * 2,
         waveAmplitude: Math.random() * 0.5 + 0.3,
-        isSuper: false,
+        connectionRadius,
       };
     };
 
@@ -158,8 +137,6 @@ export function Particles() {
 
     const drawConnections = () => {
       const particles = particlesRef.current;
-      const connectionDistance = 120;
-      const superConnectionDistance = 280; // Super particles connect much further
 
       for (let i = 0; i < particles.length; i++) {
         for (let j = i + 1; j < particles.length; j++) {
@@ -167,19 +144,17 @@ export function Particles() {
           const dy = particles[i].y - particles[j].y;
           const distance = Math.sqrt(dx * dx + dy * dy);
 
-          const isEitherSuper = particles[i].isSuper || particles[j].isSuper;
-          const maxDist = isEitherSuper ? superConnectionDistance : connectionDistance;
+          // Use the larger connectionRadius of either particle
+          const maxDist = Math.max(particles[i].connectionRadius, particles[j].connectionRadius);
 
           if (distance < maxDist) {
-            const baseAlpha = isEitherSuper ? 0.35 : 0.25;
-            const alpha = (1 - distance / maxDist) * baseAlpha;
+            const alpha = (1 - distance / maxDist) * 0.25;
             ctx.beginPath();
             ctx.moveTo(particles[i].x, particles[i].y);
             ctx.lineTo(particles[j].x, particles[j].y);
-            // Use super particle's color for its connections
-            ctx.strokeStyle = particles[i].isSuper ? particles[i].color : particles[j].isSuper ? particles[j].color : particles[i].color;
+            ctx.strokeStyle = particles[i].color;
             ctx.globalAlpha = alpha;
-            ctx.lineWidth = isEitherSuper ? 1.2 : 0.5;
+            ctx.lineWidth = 0.5;
             ctx.stroke();
             ctx.globalAlpha = 1;
           }
