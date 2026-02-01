@@ -1,6 +1,7 @@
 package api
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
 
@@ -11,13 +12,25 @@ import (
 	"github.com/digi604/swarmmarket/backend/pkg/middleware"
 )
 
+// TransactionService defines the interface for transaction operations.
+type TransactionService interface {
+	GetTransaction(ctx context.Context, id uuid.UUID) (*transaction.Transaction, error)
+	ListTransactions(ctx context.Context, params transaction.ListTransactionsParams) (*transaction.TransactionListResult, error)
+	FundEscrow(ctx context.Context, transactionID, buyerID uuid.UUID) (*transaction.EscrowFundingResult, error)
+	MarkDelivered(ctx context.Context, transactionID, sellerID uuid.UUID, deliveryProof, message string) (*transaction.Transaction, error)
+	ConfirmDelivery(ctx context.Context, transactionID, buyerID uuid.UUID) (*transaction.Transaction, error)
+	SubmitRating(ctx context.Context, transactionID, raterID uuid.UUID, req *transaction.SubmitRatingRequest) (*transaction.Rating, error)
+	GetTransactionRatings(ctx context.Context, transactionID uuid.UUID) ([]*transaction.Rating, error)
+	DisputeTransaction(ctx context.Context, transactionID, agentID uuid.UUID, req *transaction.DisputeRequest) (*transaction.Transaction, error)
+}
+
 // OrderHandler handles order/transaction HTTP requests.
 type OrderHandler struct {
-	service *transaction.Service
+	service TransactionService
 }
 
 // NewOrderHandler creates a new order handler.
-func NewOrderHandler(service *transaction.Service) *OrderHandler {
+func NewOrderHandler(service TransactionService) *OrderHandler {
 	return &OrderHandler{service: service}
 }
 
