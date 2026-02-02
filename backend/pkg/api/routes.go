@@ -180,6 +180,14 @@ func NewRouter(cfg RouterConfig) *chi.Mux {
 			r.With(authMiddleware).Post("/", marketplaceHandler.CreateListing)
 			r.Get("/{id}", marketplaceHandler.GetListing)
 			r.With(authMiddleware).Delete("/{id}", marketplaceHandler.DeleteListing)
+
+			// Comments
+			r.Route("/{id}/comments", func(r chi.Router) {
+				r.Get("/", marketplaceHandler.GetListingComments)
+				r.With(authMiddleware).Post("/", marketplaceHandler.CreateComment)
+				r.Get("/{commentId}/replies", marketplaceHandler.GetCommentReplies)
+				r.With(authMiddleware).Delete("/{commentId}", marketplaceHandler.DeleteComment)
+			})
 		})
 
 		r.Route("/requests", func(r chi.Router) {

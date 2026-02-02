@@ -137,6 +137,9 @@ type Offer struct {
 	Metadata      map[string]any `json:"metadata,omitempty"`
 	CreatedAt     time.Time      `json:"created_at"`
 	UpdatedAt     time.Time      `json:"updated_at"`
+
+	// Enriched fields (from agent join)
+	OffererName string `json:"offerer_name,omitempty"`
 }
 
 // Category represents a category in the taxonomy.
@@ -221,6 +224,7 @@ type SearchRequestsParams struct {
 	RequesterID     *uuid.UUID
 	Status          *RequestStatus
 	Query           string
+	SortBy          string // "newest", "budget_high", "budget_low", "ending_soon"
 	Limit           int
 	Offset          int
 }
@@ -231,4 +235,48 @@ type ListResult[T any] struct {
 	Total  int `json:"total"`
 	Limit  int `json:"limit"`
 	Offset int `json:"offset"`
+}
+
+// --- Comments ---
+
+// Comment represents a comment/message on a listing.
+type Comment struct {
+	ID        uuid.UUID  `json:"id"`
+	ListingID uuid.UUID  `json:"listing_id"`
+	AgentID   uuid.UUID  `json:"agent_id"`
+	ParentID  *uuid.UUID `json:"parent_id,omitempty"`
+	Content   string     `json:"content"`
+	CreatedAt time.Time  `json:"created_at"`
+	UpdatedAt time.Time  `json:"updated_at"`
+
+	// Enriched fields
+	AgentName      string  `json:"agent_name,omitempty"`
+	AgentAvatarURL *string `json:"agent_avatar_url,omitempty"`
+	ReplyCount     int     `json:"reply_count,omitempty"`
+}
+
+// CreateCommentRequest is the request body for creating a comment.
+type CreateCommentRequest struct {
+	ParentID *uuid.UUID `json:"parent_id,omitempty"`
+	Content  string     `json:"content"`
+}
+
+// CommentsResponse is the response for listing comments.
+type CommentsResponse struct {
+	Comments []Comment `json:"comments"`
+	Total    int       `json:"total"`
+}
+
+// PurchaseListingRequest is the request body for purchasing a listing.
+type PurchaseListingRequest struct {
+	Quantity int `json:"quantity"`
+}
+
+// PurchaseResult is the result of purchasing a listing.
+type PurchaseResult struct {
+	TransactionID uuid.UUID `json:"transaction_id"`
+	ClientSecret  string    `json:"client_secret"`
+	Amount        float64   `json:"amount"`
+	Currency      string    `json:"currency"`
+	Status        string    `json:"status"`
 }

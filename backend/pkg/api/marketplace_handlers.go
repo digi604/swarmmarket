@@ -203,8 +203,14 @@ func (h *MarketplaceHandler) GetRequest(w http.ResponseWriter, r *http.Request) 
 func (h *MarketplaceHandler) SearchRequests(w http.ResponseWriter, r *http.Request) {
 	params := marketplace.SearchRequestsParams{
 		Query:  r.URL.Query().Get("q"),
+		SortBy: r.URL.Query().Get("sort"),
 		Limit:  parseIntParam(r, "limit", 20),
 		Offset: parseIntParam(r, "offset", 0),
+	}
+
+	// Default sort is by budget (highest first)
+	if params.SortBy == "" {
+		params.SortBy = "budget_high"
 	}
 
 	if typeStr := r.URL.Query().Get("type"); typeStr != "" {
@@ -313,6 +319,102 @@ func (h *MarketplaceHandler) GetCategories(w http.ResponseWriter, r *http.Reques
 	}
 
 	common.WriteJSON(w, http.StatusOK, map[string]any{"categories": categories})
+}
+
+// --- Comments ---
+
+// CreateComment handles creating a new comment on a listing.
+func (h *MarketplaceHandler) CreateComment(w http.ResponseWriter, r *http.Request) {
+	agent := middleware.GetAgent(r.Context())
+	if agent == nil {
+		common.WriteError(w, http.StatusUnauthorized, common.ErrUnauthorized("not authenticated"))
+		return
+	}
+
+	listingIDStr := chi.URLParam(r, "id")
+	listingID, err := uuid.Parse(listingIDStr)
+	if err != nil {
+		common.WriteError(w, http.StatusBadRequest, common.ErrBadRequest("invalid listing id"))
+		return
+	}
+
+	var req marketplace.CreateCommentRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		common.WriteError(w, http.StatusBadRequest, common.ErrBadRequest("invalid request body"))
+		return
+	}
+
+	comment, err := h.service.CreateComment(r.Context(), agent.ID, listingID, &req)
+	if err != nil {
+		common.WriteError(w, http.StatusBadRequest, common.ErrBadRequest(err.Error()))
+		return
+	}
+
+	common.WriteJSON(w, http.StatusCreated, comment)
+}
+
+// GetListingComments handles getting comments for a listing.
+func (h *MarketplaceHandler) GetListingComments(w http.ResponseWriter, r *http.Request) {
+	listingIDStr := chi.URLParam(r, "id")
+	listingID, err := uuid.Parse(listingIDStr)
+	if err != nil {
+		common.WriteError(w, http.StatusBadRequest, common.ErrBadRequest("invalid listing id"))
+		return
+	}
+
+	limit := parseIntParam(r, "limit", 20)
+	offset := parseIntParam(r, "offset", 0)
+
+	result, err := h.service.GetListingComments(r.Context(), listingID, limit, offset)
+	if err != nil {
+		log.Printf("[ERROR] GetListingComments failed: %v (listingID=%s)", err, listingID)
+		common.WriteError(w, http.StatusInternalServerError, common.ErrInternalServer("failed to get comments"))
+		return
+	}
+
+	common.WriteJSON(w, http.StatusOK, result)
+}
+
+// GetCommentReplies handles getting replies to a comment.
+func (h *MarketplaceHandler) GetCommentReplies(w http.ResponseWriter, r *http.Request) {
+	commentIDStr := chi.URLParam(r, "commentId")
+	commentID, err := uuid.Parse(commentIDStr)
+	if err != nil {
+		common.WriteError(w, http.StatusBadRequest, common.ErrBadRequest("invalid comment id"))
+		return
+	}
+
+	replies, err := h.service.GetCommentReplies(r.Context(), commentID)
+	if err != nil {
+		log.Printf("[ERROR] GetCommentReplies failed: %v (commentID=%s)", err, commentID)
+		common.WriteError(w, http.StatusInternalServerError, common.ErrInternalServer("failed to get replies"))
+		return
+	}
+
+	common.WriteJSON(w, http.StatusOK, map[string]any{"replies": replies})
+}
+
+// DeleteComment handles deleting a comment.
+func (h *MarketplaceHandler) DeleteComment(w http.ResponseWriter, r *http.Request) {
+	agent := middleware.GetAgent(r.Context())
+	if agent == nil {
+		common.WriteError(w, http.StatusUnauthorized, common.ErrUnauthorized("not authenticated"))
+		return
+	}
+
+	commentIDStr := chi.URLParam(r, "commentId")
+	commentID, err := uuid.Parse(commentIDStr)
+	if err != nil {
+		common.WriteError(w, http.StatusBadRequest, common.ErrBadRequest("invalid comment id"))
+		return
+	}
+
+	if err := h.service.DeleteComment(r.Context(), commentID, agent.ID); err != nil {
+		common.WriteError(w, http.StatusBadRequest, common.ErrBadRequest(err.Error()))
+		return
+	}
+
+	common.WriteJSON(w, http.StatusOK, map[string]string{"status": "deleted"})
 }
 
 // --- Helpers ---

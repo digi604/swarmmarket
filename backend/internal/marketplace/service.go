@@ -23,6 +23,16 @@ type WalletChecker interface {
 	GetAgentWalletBalance(ctx context.Context, agentID uuid.UUID) (available float64, err error)
 }
 
+// PaymentCreator interface for creating payment intents.
+type PaymentCreator interface {
+	CreateEscrowPayment(ctx context.Context, transactionID, buyerID, sellerID string, amount float64, currency string) (paymentIntentID, clientSecret string, err error)
+}
+
+// ListingTransactionCreator interface for creating transactions from listing purchases.
+type ListingTransactionCreator interface {
+	CreateFromListing(ctx context.Context, buyerID, sellerID uuid.UUID, listingID *uuid.UUID, amount float64, currency string) (uuid.UUID, error)
+}
+
 // Service handles marketplace business logic.
 type Service struct {
 	repo               RepositoryInterface
@@ -327,6 +337,68 @@ func (s *Service) AcceptOffer(ctx context.Context, requesterID uuid.UUID, offerI
 // GetCategories retrieves all categories.
 func (s *Service) GetCategories(ctx context.Context) ([]Category, error) {
 	return s.repo.GetCategories(ctx)
+}
+
+// --- Comments ---
+
+// CreateComment creates a new comment on a listing.
+func (s *Service) CreateComment(ctx context.Context, agentID, listingID uuid.UUID, req *CreateCommentRequest) (*Comment, error) {
+	if req.Content == "" {
+		return nil, fmt.Errorf("content is required")
+	}
+
+	// Verify listing exists
+	listing, err := s.repo.GetListingByID(ctx, listingID)
+	if err != nil {
+		return nil, err
+	}
+
+	now := time.Now().UTC()
+	comment := &Comment{
+		ID:        uuid.New(),
+		ListingID: listingID,
+		AgentID:   agentID,
+		ParentID:  req.ParentID,
+		Content:   req.Content,
+		CreatedAt: now,
+		UpdatedAt: now,
+	}
+
+	if err := s.repo.CreateComment(ctx, comment); err != nil {
+		return nil, fmt.Errorf("failed to create comment: %w", err)
+	}
+
+	// Notify listing seller of new comment
+	s.publishEvent(ctx, "comment.created", map[string]any{
+		"comment_id": comment.ID,
+		"listing_id": listingID,
+		"seller_id":  listing.SellerID,
+		"agent_id":   agentID,
+	})
+
+	return comment, nil
+}
+
+// GetListingComments retrieves comments for a listing.
+func (s *Service) GetListingComments(ctx context.Context, listingID uuid.UUID, limit, offset int) (*CommentsResponse, error) {
+	comments, total, err := s.repo.GetCommentsByListingID(ctx, listingID, limit, offset)
+	if err != nil {
+		return nil, err
+	}
+	return &CommentsResponse{
+		Comments: comments,
+		Total:    total,
+	}, nil
+}
+
+// GetCommentReplies retrieves replies to a comment.
+func (s *Service) GetCommentReplies(ctx context.Context, parentID uuid.UUID) ([]Comment, error) {
+	return s.repo.GetCommentReplies(ctx, parentID)
+}
+
+// DeleteComment deletes a comment.
+func (s *Service) DeleteComment(ctx context.Context, commentID, agentID uuid.UUID) error {
+	return s.repo.DeleteComment(ctx, commentID, agentID)
 }
 
 // --- Helpers ---

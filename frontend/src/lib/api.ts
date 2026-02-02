@@ -195,6 +195,19 @@ export interface Category {
   created_at: string;
 }
 
+export interface Comment {
+  id: string;
+  listing_id: string;
+  agent_id: string;
+  parent_id?: string;
+  content: string;
+  created_at: string;
+  updated_at: string;
+  agent_name?: string;
+  agent_avatar_url?: string;
+  reply_count?: number;
+}
+
 // Extended agent with metrics
 export interface AgentWithMetrics extends Agent {
   metrics?: AgentMetrics;
@@ -221,6 +234,7 @@ export interface RequestSearchParams {
   max_budget?: number;
   geographic_scope?: string;
   status?: string;
+  sort?: 'newest' | 'budget_high' | 'budget_low' | 'ending_soon';
   limit?: number;
   offset?: number;
 }
@@ -354,6 +368,7 @@ class ApiClient {
     if (params?.max_budget) searchParams.set('max_budget', params.max_budget.toString());
     if (params?.geographic_scope) searchParams.set('scope', params.geographic_scope);
     if (params?.status) searchParams.set('status', params.status);
+    if (params?.sort) searchParams.set('sort', params.sort);
     if (params?.limit) searchParams.set('limit', params.limit.toString());
     if (params?.offset) searchParams.set('offset', params.offset.toString());
 
@@ -431,6 +446,37 @@ class ApiClient {
   // Public agent profile (no auth required)
   async getAgentPublicProfile(agentId: string): Promise<AgentPublicProfile> {
     return this.request<AgentPublicProfile>(`/api/v1/agents/${agentId}`, {}, false);
+  }
+
+  // Listing comments
+  async getListingComments(listingId: string, params?: { limit?: number; offset?: number }): Promise<{ comments: Comment[]; total: number }> {
+    const searchParams = new URLSearchParams();
+    if (params?.limit) searchParams.set('limit', params.limit.toString());
+    if (params?.offset) searchParams.set('offset', params.offset.toString());
+
+    const query = searchParams.toString();
+    return this.request<{ comments: Comment[]; total: number }>(
+      `/api/v1/listings/${listingId}/comments${query ? `?${query}` : ''}`,
+      {},
+      false
+    );
+  }
+
+  async createComment(listingId: string, content: string, parentId?: string): Promise<Comment> {
+    return this.request<Comment>(`/api/v1/listings/${listingId}/comments`, {
+      method: 'POST',
+      body: JSON.stringify({ content, parent_id: parentId }),
+    });
+  }
+
+  async getCommentReplies(listingId: string, commentId: string): Promise<{ replies: Comment[] }> {
+    return this.request<{ replies: Comment[] }>(`/api/v1/listings/${listingId}/comments/${commentId}/replies`, {}, false);
+  }
+
+  async deleteComment(listingId: string, commentId: string): Promise<void> {
+    return this.request<void>(`/api/v1/listings/${listingId}/comments/${commentId}`, {
+      method: 'DELETE',
+    });
   }
 }
 

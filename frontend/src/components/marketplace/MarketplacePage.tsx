@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { Search, ChevronDown, X, Store, AlertTriangle, RefreshCw } from 'lucide-react';
 import { api } from '../../lib/api';
 import type { Listing, Request, Auction, Category } from '../../lib/api';
@@ -12,9 +12,9 @@ type ListingType = 'goods' | 'services' | 'data' | '';
 type GeographicScope = 'local' | 'regional' | 'national' | 'international' | '';
 
 const tabs: { id: TabType; label: string; color: string }[] = [
-  { id: 'listings', label: 'Listings', color: '#22D3EE' },
   { id: 'requests', label: 'Requests', color: '#A855F7' },
   { id: 'auctions', label: 'Auctions', color: '#EC4899' },
+  { id: 'listings', label: 'Listings', color: '#22D3EE' },
 ];
 
 const typeOptions = [
@@ -32,10 +32,17 @@ const scopeOptions = [
   { value: 'international', label: 'International' },
 ];
 
-const sortOptions = [
+const sortOptionsListings = [
   { value: 'newest', label: 'Newest First' },
   { value: 'price_low', label: 'Price: Low to High' },
   { value: 'price_high', label: 'Price: High to Low' },
+  { value: 'ending_soon', label: 'Ending Soon' },
+];
+
+const sortOptionsRequests = [
+  { value: 'budget_high', label: 'Budget: High to Low' },
+  { value: 'budget_low', label: 'Budget: Low to High' },
+  { value: 'newest', label: 'Newest First' },
   { value: 'ending_soon', label: 'Ending Soon' },
 ];
 
@@ -45,12 +52,21 @@ interface MarketplacePageProps {
 
 export function MarketplacePage({ showHeader = true }: MarketplacePageProps) {
   const navigate = useNavigate();
-  const [activeTab, setActiveTab] = useState<TabType>('listings');
+  const location = useLocation();
+
+  // Derive active tab from URL path
+  const getTabFromPath = (): TabType => {
+    if (location.pathname.includes('/marketplace/auctions')) return 'auctions';
+    if (location.pathname.includes('/marketplace/listings')) return 'listings';
+    return 'requests'; // default
+  };
+
+  const activeTab = getTabFromPath();
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedType, setSelectedType] = useState<ListingType>('');
   const [selectedScope, setSelectedScope] = useState<GeographicScope>('');
   const [selectedCategory, setSelectedCategory] = useState('');
-  const [sortBy, setSortBy] = useState('newest');
+  const [sortBy, setSortBy] = useState(() => activeTab === 'requests' ? 'budget_high' : 'newest');
   const [categories, setCategories] = useState<Category[]>([]);
 
   const [listings, setListings] = useState<Listing[]>([]);
@@ -81,7 +97,7 @@ export function MarketplacePage({ showHeader = true }: MarketplacePageProps) {
           setListings(res.listings || []);
           setTotal(res.total || 0);
         } else if (activeTab === 'requests') {
-          const params: any = { status: 'open', limit: 12 };
+          const params: any = { status: 'open', limit: 12, sort: sortBy };
           if (searchQuery) params.query = searchQuery;
           if (selectedType) params.request_type = selectedType;
           if (selectedScope) params.geographic_scope = selectedScope;
@@ -116,15 +132,22 @@ export function MarketplacePage({ showHeader = true }: MarketplacePageProps) {
 
   const activeTabColor = tabs.find((t) => t.id === activeTab)?.color || '#22D3EE';
 
+  const getDefaultSort = (tab: TabType) => tab === 'requests' ? 'budget_high' : 'newest';
+
   const clearFilters = () => {
     setSearchQuery('');
     setSelectedType('');
     setSelectedScope('');
     setSelectedCategory('');
-    setSortBy('newest');
+    setSortBy(getDefaultSort(activeTab));
   };
 
-  const hasFilters = searchQuery || selectedType || selectedScope || selectedCategory || sortBy !== 'newest';
+  const handleTabChange = (tab: TabType) => {
+    navigate(`/dashboard/marketplace/${tab}`);
+    setSortBy(getDefaultSort(tab));
+  };
+
+  const hasFilters = searchQuery || selectedType || selectedScope || selectedCategory || sortBy !== getDefaultSort(activeTab);
 
   return (
     <div className="flex flex-col gap-6 w-full">
@@ -176,7 +199,7 @@ export function MarketplacePage({ showHeader = true }: MarketplacePageProps) {
         {tabs.map((tab) => (
           <button
             key={tab.id}
-            onClick={() => setActiveTab(tab.id)}
+            onClick={() => handleTabChange(tab.id)}
             className="relative px-6 py-3 text-sm font-medium transition-colors"
             style={{
               color: activeTab === tab.id ? tab.color : '#64748B',
@@ -283,7 +306,7 @@ export function MarketplacePage({ showHeader = true }: MarketplacePageProps) {
               color: '#94A3B8',
             }}
           >
-            {sortOptions.map((opt) => (
+            {(activeTab === 'requests' ? sortOptionsRequests : sortOptionsListings).map((opt) => (
               <option key={opt.value} value={opt.value}>
                 {opt.label}
               </option>

@@ -13,10 +13,10 @@ import {
   Globe,
   ShieldCheck,
   MessageCircle,
-  Share2,
   CheckCircle,
   BadgeCheck,
 } from 'lucide-react';
+import { ShareButton } from '../ui/ShareButton';
 import { api } from '../../lib/api';
 import type { Request, Offer } from '../../lib/api';
 
@@ -142,21 +142,28 @@ export function RequestDetailPage() {
             <ArrowLeft className="w-5 h-5 text-[#94A3B8]" />
           </button>
           <div className="flex items-center gap-2 text-sm">
-            <span className="text-[#64748B]">Marketplace</span>
+            <button
+              onClick={() => navigate('/dashboard/marketplace/requests')}
+              className="text-[#64748B] hover:text-white transition-colors"
+            >
+              Marketplace
+            </button>
             <span className="text-[#64748B]">/</span>
-            <span className="text-[#64748B]">Requests</span>
+            <button
+              onClick={() => navigate('/dashboard/marketplace/requests')}
+              className="text-[#64748B] hover:text-white transition-colors"
+            >
+              Requests
+            </button>
             <span className="text-[#64748B]">/</span>
             <span className="text-white font-medium truncate max-w-[200px]">{request.title}</span>
           </div>
         </div>
         <div className="flex items-center gap-3">
-          <button
-            className="flex items-center gap-2 px-4 h-10 rounded-lg transition-colors hover:bg-[#334155]"
-            style={{ backgroundColor: '#1E293B', border: '1px solid #334155' }}
-          >
-            <Share2 className="w-4 h-4 text-[#94A3B8]" />
-            <span className="text-white text-sm font-medium">Share</span>
-          </button>
+          <ShareButton
+            title={request.title}
+            text={`Check out "${request.title}" on SwarmMarket`}
+          />
         </div>
       </div>
 

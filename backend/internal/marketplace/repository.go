@@ -446,6 +446,19 @@ func (r *Repository) SearchRequests(ctx context.Context, params SearchRequestsPa
 		offset = 0
 	}
 
+	// Determine sort order
+	orderBy := "r.created_at DESC" // default: newest
+	switch params.SortBy {
+	case "budget_high":
+		orderBy = "COALESCE(r.budget_max, r.budget_min, 0) DESC, r.created_at DESC"
+	case "budget_low":
+		orderBy = "COALESCE(r.budget_min, r.budget_max, 0) ASC, r.created_at DESC"
+	case "ending_soon":
+		orderBy = "r.expires_at ASC NULLS LAST, r.created_at DESC"
+	case "newest":
+		orderBy = "r.created_at DESC"
+	}
+
 	query := fmt.Sprintf(`
 		SELECT r.id, COALESCE(r.slug, ''), r.requester_id, r.category_id, r.title, r.description,
 			r.request_type, r.budget_min, r.budget_max, r.budget_currency,
@@ -459,9 +472,9 @@ func (r *Repository) SearchRequests(ctx context.Context, params SearchRequestsPa
 		FROM requests r
 		LEFT JOIN agents a ON r.requester_id = a.id
 		%s
-		ORDER BY r.created_at DESC
+		ORDER BY %s
 		LIMIT $%d OFFSET $%d
-	`, whereClause, argNum, argNum+1)
+	`, whereClause, orderBy, argNum, argNum+1)
 
 	args = append(args, limit, offset)
 
@@ -541,12 +554,14 @@ func (r *Repository) GetOfferByID(ctx context.Context, id uuid.UUID) (*Offer, er
 // GetOffersByRequestID retrieves all offers for a request.
 func (r *Repository) GetOffersByRequestID(ctx context.Context, requestID uuid.UUID) ([]Offer, error) {
 	query := `
-		SELECT id, request_id, offerer_id, listing_id, price_amount, price_currency,
-			description, delivery_terms, valid_until, status, metadata,
-			created_at, updated_at
-		FROM offers
-		WHERE request_id = $1
-		ORDER BY created_at DESC
+		SELECT o.id, o.request_id, o.offerer_id, o.listing_id, o.price_amount, o.price_currency,
+			o.description, o.delivery_terms, o.valid_until, o.status, o.metadata,
+			o.created_at, o.updated_at,
+			COALESCE(a.name, '') AS offerer_name
+		FROM offers o
+		LEFT JOIN agents a ON a.id = o.offerer_id
+		WHERE o.request_id = $1
+		ORDER BY o.created_at DESC
 	`
 	rows, err := r.pool.Query(ctx, query, requestID)
 	if err != nil {
@@ -561,6 +576,7 @@ func (r *Repository) GetOffersByRequestID(ctx context.Context, requestID uuid.UU
 			&o.ID, &o.RequestID, &o.OffererID, &o.ListingID, &o.PriceAmount,
 			&o.PriceCurrency, &o.Description, &o.DeliveryTerms, &o.ValidUntil,
 			&o.Status, &o.Metadata, &o.CreatedAt, &o.UpdatedAt,
+			&o.OffererName,
 		); err != nil {
 			return nil, err
 		}
@@ -609,4 +625,108 @@ func (r *Repository) GetCategories(ctx context.Context) ([]Category, error) {
 		categories = append(categories, c)
 	}
 	return categories, nil
+}
+
+// --- Comments ---
+
+// CreateComment creates a new comment on a listing.
+func (r *Repository) CreateComment(ctx context.Context, comment *Comment) error {
+	query := `
+		INSERT INTO listing_comments (id, listing_id, agent_id, parent_id, content, created_at, updated_at)
+		VALUES ($1, $2, $3, $4, $5, $6, $7)
+	`
+	_, err := r.pool.Exec(ctx, query,
+		comment.ID, comment.ListingID, comment.AgentID, comment.ParentID,
+		comment.Content, comment.CreatedAt, comment.UpdatedAt,
+	)
+	return err
+}
+
+// GetCommentsByListingID retrieves all top-level comments for a listing.
+func (r *Repository) GetCommentsByListingID(ctx context.Context, listingID uuid.UUID, limit, offset int) ([]Comment, int, error) {
+	// Get total count
+	var total int
+	countQuery := `SELECT COUNT(*) FROM listing_comments WHERE listing_id = $1 AND parent_id IS NULL`
+	if err := r.pool.QueryRow(ctx, countQuery, listingID).Scan(&total); err != nil {
+		return nil, 0, err
+	}
+
+	if limit <= 0 {
+		limit = 20
+	}
+
+	query := `
+		SELECT c.id, c.listing_id, c.agent_id, c.parent_id, c.content, c.created_at, c.updated_at,
+			COALESCE(a.name, '') as agent_name,
+			a.avatar_url as agent_avatar_url,
+			(SELECT COUNT(*) FROM listing_comments WHERE parent_id = c.id) as reply_count
+		FROM listing_comments c
+		LEFT JOIN agents a ON c.agent_id = a.id
+		WHERE c.listing_id = $1 AND c.parent_id IS NULL
+		ORDER BY c.created_at DESC
+		LIMIT $2 OFFSET $3
+	`
+	rows, err := r.pool.Query(ctx, query, listingID, limit, offset)
+	if err != nil {
+		return nil, 0, err
+	}
+	defer rows.Close()
+
+	var comments []Comment
+	for rows.Next() {
+		var c Comment
+		if err := rows.Scan(
+			&c.ID, &c.ListingID, &c.AgentID, &c.ParentID, &c.Content,
+			&c.CreatedAt, &c.UpdatedAt, &c.AgentName, &c.AgentAvatarURL, &c.ReplyCount,
+		); err != nil {
+			return nil, 0, err
+		}
+		comments = append(comments, c)
+	}
+	return comments, total, nil
+}
+
+// GetCommentReplies retrieves replies to a comment.
+func (r *Repository) GetCommentReplies(ctx context.Context, parentID uuid.UUID) ([]Comment, error) {
+	query := `
+		SELECT c.id, c.listing_id, c.agent_id, c.parent_id, c.content, c.created_at, c.updated_at,
+			COALESCE(a.name, '') as agent_name,
+			a.avatar_url as agent_avatar_url,
+			0 as reply_count
+		FROM listing_comments c
+		LEFT JOIN agents a ON c.agent_id = a.id
+		WHERE c.parent_id = $1
+		ORDER BY c.created_at ASC
+	`
+	rows, err := r.pool.Query(ctx, query, parentID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var comments []Comment
+	for rows.Next() {
+		var c Comment
+		if err := rows.Scan(
+			&c.ID, &c.ListingID, &c.AgentID, &c.ParentID, &c.Content,
+			&c.CreatedAt, &c.UpdatedAt, &c.AgentName, &c.AgentAvatarURL, &c.ReplyCount,
+		); err != nil {
+			return nil, err
+		}
+		comments = append(comments, c)
+	}
+	return comments, nil
+}
+
+// DeleteComment deletes a comment (only by the author).
+func (r *Repository) DeleteComment(ctx context.Context, commentID, agentID uuid.UUID) error {
+	query := `DELETE FROM listing_comments WHERE id = $1 AND agent_id = $2`
+	result, err := r.pool.Exec(ctx, query, commentID, agentID)
+	if err != nil {
+		return err
+	}
+	if result.RowsAffected() == 0 {
+		return fmt.Errorf("comment not found or not authorized")
+	}
+	return nil
 }

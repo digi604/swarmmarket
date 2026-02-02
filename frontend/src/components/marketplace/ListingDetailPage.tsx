@@ -1,5 +1,6 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
+import { useAuth } from '@clerk/clerk-react';
 import {
   ArrowLeft,
   Star,
@@ -12,13 +13,17 @@ import {
   Globe,
   ShieldCheck,
   MessageCircle,
-  Share2,
   BadgeCheck,
   Timer,
   ShoppingCart,
+  Send,
+  Reply,
+  ChevronDown,
+  ChevronUp,
 } from 'lucide-react';
+import { ShareButton } from '../ui/ShareButton';
 import { api } from '../../lib/api';
-import type { Listing, AgentPublicProfile } from '../../lib/api';
+import type { Listing, AgentPublicProfile, Comment } from '../../lib/api';
 
 const typeConfig = {
   goods: { icon: Package, label: 'Goods', color: '#EC4899', bgColor: 'rgba(236, 72, 153, 0.2)' },
@@ -44,10 +49,21 @@ const scopeLabels: Record<string, string> = {
 export function ListingDetailPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const { isSignedIn } = useAuth();
   const [listing, setListing] = useState<Listing | null>(null);
   const [sellerProfile, setSellerProfile] = useState<AgentPublicProfile | null>(null);
   const [loading, setLoading] = useState(true);
   const [quantity, setQuantity] = useState('1');
+
+  // Comments state
+  const [comments, setComments] = useState<Comment[]>([]);
+  const [commentsLoading, setCommentsLoading] = useState(false);
+  const [newComment, setNewComment] = useState('');
+  const [submitting, setSubmitting] = useState(false);
+  const [replyingTo, setReplyingTo] = useState<string | null>(null);
+  const [replyContent, setReplyContent] = useState('');
+  const [expandedReplies, setExpandedReplies] = useState<Set<string>>(new Set());
+  const [commentReplies, setCommentReplies] = useState<Record<string, Comment[]>>({});
 
   useEffect(() => {
     if (!id) return;
@@ -75,6 +91,79 @@ export function ListingDetailPage() {
 
     fetchData();
   }, [id]);
+
+  // Fetch comments
+  const fetchComments = useCallback(async () => {
+    if (!id) return;
+    setCommentsLoading(true);
+    try {
+      const result = await api.getListingComments(id);
+      setComments(result.comments || []);
+    } catch (err) {
+      console.error('Failed to fetch comments:', err);
+    }
+    setCommentsLoading(false);
+  }, [id]);
+
+  useEffect(() => {
+    if (listing) {
+      fetchComments();
+    }
+  }, [listing, fetchComments]);
+
+  // Fetch replies for a comment
+  const fetchReplies = async (commentId: string) => {
+    if (!id) return;
+    try {
+      const result = await api.getCommentReplies(id, commentId);
+      setCommentReplies(prev => ({ ...prev, [commentId]: result.replies || [] }));
+    } catch (err) {
+      console.error('Failed to fetch replies:', err);
+    }
+  };
+
+  const toggleReplies = (commentId: string, replyCount: number) => {
+    if (expandedReplies.has(commentId)) {
+      setExpandedReplies(prev => {
+        const next = new Set(prev);
+        next.delete(commentId);
+        return next;
+      });
+    } else {
+      setExpandedReplies(prev => new Set(prev).add(commentId));
+      if (replyCount > 0 && !commentReplies[commentId]) {
+        fetchReplies(commentId);
+      }
+    }
+  };
+
+  const handleSubmitComment = async () => {
+    if (!id || !newComment.trim() || submitting) return;
+    setSubmitting(true);
+    try {
+      await api.createComment(id, newComment.trim());
+      setNewComment('');
+      fetchComments();
+    } catch (err) {
+      console.error('Failed to post comment:', err);
+    }
+    setSubmitting(false);
+  };
+
+  const handleSubmitReply = async (parentId: string) => {
+    if (!id || !replyContent.trim() || submitting) return;
+    setSubmitting(true);
+    try {
+      await api.createComment(id, replyContent.trim(), parentId);
+      setReplyContent('');
+      setReplyingTo(null);
+      fetchComments();
+      fetchReplies(parentId);
+    } catch (err) {
+      console.error('Failed to post reply:', err);
+    }
+    setSubmitting(false);
+  };
 
   const formatPrice = (amount?: number, currency?: string) => {
     if (!amount) return 'Contact for price';
@@ -148,21 +237,28 @@ export function ListingDetailPage() {
             <ArrowLeft className="w-5 h-5 text-[#94A3B8]" />
           </button>
           <div className="flex items-center gap-2 text-sm">
-            <span className="text-[#64748B]">Marketplace</span>
+            <button
+              onClick={() => navigate('/dashboard/marketplace/requests')}
+              className="text-[#64748B] hover:text-white transition-colors"
+            >
+              Marketplace
+            </button>
             <span className="text-[#64748B]">/</span>
-            <span className="text-[#64748B]">Listings</span>
+            <button
+              onClick={() => navigate('/dashboard/marketplace/listings')}
+              className="text-[#64748B] hover:text-white transition-colors"
+            >
+              Listings
+            </button>
             <span className="text-[#64748B]">/</span>
             <span className="text-white font-medium truncate max-w-[200px]">{listing.title}</span>
           </div>
         </div>
         <div className="flex items-center gap-3">
-          <button
-            className="flex items-center gap-2 px-4 h-10 rounded-lg transition-colors hover:bg-[#334155]"
-            style={{ backgroundColor: '#1E293B', border: '1px solid #334155' }}
-          >
-            <Share2 className="w-4 h-4 text-[#94A3B8]" />
-            <span className="text-white text-sm font-medium">Share</span>
-          </button>
+          <ShareButton
+            title={listing.title}
+            text={`Check out "${listing.title}" on SwarmMarket`}
+          />
         </div>
       </div>
 
@@ -282,6 +378,243 @@ export function ListingDetailPage() {
                 </div>
               )}
             </div>
+          </div>
+
+          {/* Comments Section */}
+          <div
+            className="flex flex-col gap-5"
+            style={{
+              backgroundColor: '#1E293B',
+              borderRadius: '16px',
+              border: '1px solid #334155',
+              padding: '24px',
+            }}
+          >
+            <div className="flex items-center justify-between">
+              <h3 className="text-lg font-semibold text-white flex items-center gap-2">
+                <MessageCircle className="w-5 h-5 text-[#22D3EE]" />
+                Discussion
+              </h3>
+              <span className="text-sm text-[#64748B]">
+                {comments.length} comment{comments.length !== 1 ? 's' : ''}
+              </span>
+            </div>
+
+            {/* New Comment Input */}
+            {isSignedIn ? (
+              <div className="flex gap-3">
+                <div
+                  className="flex-1 flex items-center"
+                  style={{
+                    backgroundColor: '#0F172A',
+                    borderRadius: '12px',
+                    border: '1px solid #334155',
+                    padding: '0 16px',
+                    height: '48px',
+                  }}
+                >
+                  <input
+                    type="text"
+                    placeholder="Write a message..."
+                    value={newComment}
+                    onChange={(e) => setNewComment(e.target.value)}
+                    onKeyDown={(e) => e.key === 'Enter' && handleSubmitComment()}
+                    className="flex-1 bg-transparent border-none outline-none text-white placeholder-[#64748B] text-sm"
+                  />
+                </div>
+                <button
+                  onClick={handleSubmitComment}
+                  disabled={!newComment.trim() || submitting}
+                  className="w-12 h-12 rounded-lg flex items-center justify-center transition-colors disabled:opacity-50"
+                  style={{
+                    background: newComment.trim() ? 'linear-gradient(90deg, #22D3EE 0%, #A855F7 100%)' : '#334155',
+                  }}
+                >
+                  <Send className="w-5 h-5 text-white" />
+                </button>
+              </div>
+            ) : (
+              <div
+                className="text-center py-4 text-sm text-[#64748B]"
+                style={{ backgroundColor: '#0F172A', borderRadius: '12px' }}
+              >
+                Sign in to join the discussion
+              </div>
+            )}
+
+            {/* Comments List */}
+            {commentsLoading ? (
+              <div className="flex justify-center py-8">
+                <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-[#22D3EE]" />
+              </div>
+            ) : comments.length === 0 ? (
+              <div className="text-center py-8 text-sm text-[#64748B]">
+                No messages yet. Be the first to ask a question!
+              </div>
+            ) : (
+              <div className="flex flex-col gap-4">
+                {comments.map((comment) => (
+                  <div key={comment.id} className="flex flex-col gap-3">
+                    {/* Comment */}
+                    <div
+                      className="flex gap-3"
+                      style={{
+                        backgroundColor: '#0F172A',
+                        borderRadius: '12px',
+                        padding: '16px',
+                      }}
+                    >
+                      {comment.agent_avatar_url ? (
+                        <img
+                          src={comment.agent_avatar_url}
+                          alt={comment.agent_name || 'Agent'}
+                          className="w-8 h-8 rounded-full object-cover flex-shrink-0"
+                        />
+                      ) : (
+                        <div
+                          className="w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0"
+                          style={{
+                            background: 'linear-gradient(135deg, #22D3EE 0%, #A855F7 100%)',
+                          }}
+                        >
+                          <span className="text-white text-xs font-semibold">
+                            {comment.agent_name?.[0]?.toUpperCase() || 'A'}
+                          </span>
+                        </div>
+                      )}
+                      <div className="flex-1 flex flex-col gap-2">
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-2">
+                            <span className="text-white text-sm font-medium">
+                              {comment.agent_name || 'Agent'}
+                            </span>
+                            <span className="text-[#64748B] text-xs">
+                              {getTimeAgo(comment.created_at)}
+                            </span>
+                          </div>
+                        </div>
+                        <p className="text-[#CBD5E1] text-sm leading-relaxed">
+                          {comment.content}
+                        </p>
+                        <div className="flex items-center gap-4">
+                          {isSignedIn && (
+                            <button
+                              onClick={() => {
+                                setReplyingTo(replyingTo === comment.id ? null : comment.id);
+                                setReplyContent('');
+                              }}
+                              className="flex items-center gap-1 text-xs text-[#64748B] hover:text-[#22D3EE] transition-colors"
+                            >
+                              <Reply className="w-3 h-3" />
+                              Reply
+                            </button>
+                          )}
+                          {(comment.reply_count ?? 0) > 0 && (
+                            <button
+                              onClick={() => toggleReplies(comment.id, comment.reply_count ?? 0)}
+                              className="flex items-center gap-1 text-xs text-[#64748B] hover:text-[#22D3EE] transition-colors"
+                            >
+                              {expandedReplies.has(comment.id) ? (
+                                <ChevronUp className="w-3 h-3" />
+                              ) : (
+                                <ChevronDown className="w-3 h-3" />
+                              )}
+                              {comment.reply_count} repl{comment.reply_count === 1 ? 'y' : 'ies'}
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Reply Input */}
+                    {replyingTo === comment.id && (
+                      <div className="flex gap-3 ml-11">
+                        <div
+                          className="flex-1 flex items-center"
+                          style={{
+                            backgroundColor: '#0F172A',
+                            borderRadius: '12px',
+                            border: '1px solid #334155',
+                            padding: '0 16px',
+                            height: '40px',
+                          }}
+                        >
+                          <input
+                            type="text"
+                            placeholder="Write a reply..."
+                            value={replyContent}
+                            onChange={(e) => setReplyContent(e.target.value)}
+                            onKeyDown={(e) => e.key === 'Enter' && handleSubmitReply(comment.id)}
+                            className="flex-1 bg-transparent border-none outline-none text-white placeholder-[#64748B] text-sm"
+                            autoFocus
+                          />
+                        </div>
+                        <button
+                          onClick={() => handleSubmitReply(comment.id)}
+                          disabled={!replyContent.trim() || submitting}
+                          className="w-10 h-10 rounded-lg flex items-center justify-center transition-colors disabled:opacity-50"
+                          style={{
+                            background: replyContent.trim() ? 'linear-gradient(90deg, #22D3EE 0%, #A855F7 100%)' : '#334155',
+                          }}
+                        >
+                          <Send className="w-4 h-4 text-white" />
+                        </button>
+                      </div>
+                    )}
+
+                    {/* Replies */}
+                    {expandedReplies.has(comment.id) && commentReplies[comment.id] && (
+                      <div className="flex flex-col gap-2 ml-11">
+                        {commentReplies[comment.id].map((reply) => (
+                          <div
+                            key={reply.id}
+                            className="flex gap-3"
+                            style={{
+                              backgroundColor: '#0F172A',
+                              borderRadius: '10px',
+                              padding: '12px',
+                              borderLeft: '2px solid #334155',
+                            }}
+                          >
+                            {reply.agent_avatar_url ? (
+                              <img
+                                src={reply.agent_avatar_url}
+                                alt={reply.agent_name || 'Agent'}
+                                className="w-6 h-6 rounded-full object-cover flex-shrink-0"
+                              />
+                            ) : (
+                              <div
+                                className="w-6 h-6 rounded-full flex items-center justify-center flex-shrink-0"
+                                style={{
+                                  background: 'linear-gradient(135deg, #22D3EE 0%, #A855F7 100%)',
+                                }}
+                              >
+                                <span className="text-white text-[10px] font-semibold">
+                                  {reply.agent_name?.[0]?.toUpperCase() || 'A'}
+                                </span>
+                              </div>
+                            )}
+                            <div className="flex-1 flex flex-col gap-1">
+                              <div className="flex items-center gap-2">
+                                <span className="text-white text-xs font-medium">
+                                  {reply.agent_name || 'Agent'}
+                                </span>
+                                <span className="text-[#64748B] text-[10px]">
+                                  {getTimeAgo(reply.created_at)}
+                                </span>
+                              </div>
+                              <p className="text-[#CBD5E1] text-xs leading-relaxed">
+                                {reply.content}
+                              </p>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         </div>
 

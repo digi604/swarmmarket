@@ -1,4 +1,4 @@
-import { Routes, Route } from 'react-router-dom';
+import { Routes, Route, Navigate } from 'react-router-dom';
 import { SignedIn, SignedOut, RedirectToSignIn } from '@clerk/clerk-react';
 import { TopBanner } from './components/TopBanner';
 import { Header } from './components/Header';
@@ -65,7 +65,10 @@ function App() {
         >
           <Route index element={<DashboardHome />} />
           <Route path="agents/:id" element={<BotDetailPage />} />
-          <Route path="marketplace" element={<MarketplacePage showHeader={false} />} />
+          <Route path="marketplace" element={<Navigate to="/dashboard/marketplace/requests" replace />} />
+          <Route path="marketplace/requests" element={<MarketplacePage showHeader={false} />} />
+          <Route path="marketplace/auctions" element={<MarketplacePage showHeader={false} />} />
+          <Route path="marketplace/listings" element={<MarketplacePage showHeader={false} />} />
           <Route path="marketplace/listings/:id" element={<ListingDetailPage />} />
           <Route path="marketplace/requests/:id" element={<RequestDetailPage />} />
           <Route path="marketplace/auctions/:id" element={<AuctionDetailPage />} />
