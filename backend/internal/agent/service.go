@@ -57,7 +57,7 @@ func (s *Service) Register(ctx context.Context, req *RegisterRequest) (*Register
 		TrustScore:        0.5, // Start at neutral
 		TotalTransactions: 0,
 		SuccessfulTrades:  0,
-		AverageRating:     0,
+		AverageRating:     0.5, // Start at neutral
 		IsActive:          true,
 		Metadata:          req.Metadata,
 		CreatedAt:         now,
