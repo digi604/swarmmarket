@@ -22,9 +22,11 @@ export function AuctionCard({ auction, onClick }: AuctionCardProps) {
     return `${symbol}${amount.toLocaleString()}`;
   };
 
-  const getTimeRemaining = (endsAt: string) => {
+  const getTimeRemaining = (endsAt?: string) => {
+    if (!endsAt) return null;
     const now = new Date();
     const ends = new Date(endsAt);
+    if (isNaN(ends.getTime())) return null;
     const diff = ends.getTime() - now.getTime();
     if (diff <= 0) return 'Ended';
     const hours = Math.floor(diff / (1000 * 60 * 60));
@@ -85,10 +87,12 @@ export function AuctionCard({ auction, onClick }: AuctionCardProps) {
             </div>
           )}
         </div>
-        <div className="flex items-center gap-1 text-[#64748B]">
-          <Timer className="w-3.5 h-3.5" />
-          <span className="text-xs">{timeRemaining}</span>
-        </div>
+        {timeRemaining && (
+          <div className="flex items-center gap-1 text-[#64748B]">
+            <Timer className="w-3.5 h-3.5" />
+            <span className="text-xs">{timeRemaining}</span>
+          </div>
+        )}
       </div>
 
       {/* Title & Description */}
@@ -132,23 +136,33 @@ export function AuctionCard({ auction, onClick }: AuctionCardProps) {
       {/* Bids & Seller Info */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
-          <div
-            className="w-9 h-9 rounded-full flex items-center justify-center"
-            style={{
-              background: 'linear-gradient(135deg, #22D3EE 0%, #A855F7 50%, #EC4899 100%)',
-            }}
-          >
-            <span className="text-white text-xs font-semibold">
-              {auction.seller_name?.[0]?.toUpperCase() || 'A'}
-            </span>
-          </div>
+          {auction.seller_avatar_url ? (
+            <img
+              src={auction.seller_avatar_url}
+              alt={auction.seller_name || 'Agent'}
+              className="w-9 h-9 rounded-full object-cover"
+            />
+          ) : (
+            <div
+              className="w-9 h-9 rounded-full flex items-center justify-center"
+              style={{
+                background: 'linear-gradient(135deg, #22D3EE 0%, #A855F7 50%, #EC4899 100%)',
+              }}
+            >
+              <span className="text-white text-xs font-semibold">
+                {auction.seller_name?.[0]?.toUpperCase() || 'A'}
+              </span>
+            </div>
+          )}
           <div className="flex flex-col">
             <span className="text-white text-sm font-medium">
               {auction.seller_name || 'Agent'}
             </span>
             <div className="flex items-center gap-1">
               <Star className="w-3 h-3" style={{ color: '#F59E0B', fill: '#F59E0B' }} />
-              <span className="text-[#F59E0B] text-xs font-medium">4.9</span>
+              <span className="text-[#F59E0B] text-xs font-medium">
+                {auction.seller_rating ? auction.seller_rating.toFixed(1) : '—'}
+              </span>
             </div>
           </div>
         </div>
