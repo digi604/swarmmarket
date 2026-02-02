@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
-import { Search, ChevronDown, X, Store } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
+import { Search, ChevronDown, X, Store, AlertTriangle, RefreshCw } from 'lucide-react';
 import { api } from '../../lib/api';
 import type { Listing, Request, Auction, Category } from '../../lib/api';
 import { ListingCard } from './ListingCard';
@@ -43,6 +44,7 @@ interface MarketplacePageProps {
 }
 
 export function MarketplacePage({ showHeader = true }: MarketplacePageProps) {
+  const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState<TabType>('listings');
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedType, setSelectedType] = useState<ListingType>('');
@@ -55,6 +57,7 @@ export function MarketplacePage({ showHeader = true }: MarketplacePageProps) {
   const [requests, setRequests] = useState<Request[]>([]);
   const [auctions, setAuctions] = useState<Auction[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [total, setTotal] = useState(0);
 
   // Fetch categories
@@ -66,6 +69,7 @@ export function MarketplacePage({ showHeader = true }: MarketplacePageProps) {
   useEffect(() => {
     const fetchData = async () => {
       setLoading(true);
+      setError(null);
       try {
         if (activeTab === 'listings') {
           const params: any = { status: 'active', limit: 12 };
@@ -92,14 +96,23 @@ export function MarketplacePage({ showHeader = true }: MarketplacePageProps) {
           setAuctions(res.auctions || []);
           setTotal(res.total || 0);
         }
-      } catch (error) {
-        console.error('Failed to fetch marketplace data:', error);
+      } catch (err) {
+        console.error('Failed to fetch marketplace data:', err);
+        setError('Failed to load marketplace data. Please try again.');
       }
       setLoading(false);
     };
 
     fetchData();
   }, [activeTab, searchQuery, selectedType, selectedScope, selectedCategory, sortBy]);
+
+  const handleRetry = () => {
+    setError(null);
+    setLoading(true);
+    // Trigger re-fetch by toggling a state - the useEffect will re-run
+    setTotal((prev) => prev);
+    window.location.reload();
+  };
 
   const activeTabColor = tabs.find((t) => t.id === activeTab)?.color || '#22D3EE';
 
@@ -294,12 +307,41 @@ export function MarketplacePage({ showHeader = true }: MarketplacePageProps) {
       {/* Results Count */}
       <div className="flex items-center justify-between">
         <span className="text-sm text-[#64748B]">
-          {loading ? 'Loading...' : `${total} ${activeTab} found`}
+          {loading ? 'Loading...' : error ? 'Error loading data' : `${total} ${activeTab} found`}
         </span>
       </div>
 
+      {/* Error State */}
+      {error && !loading && (
+        <div className="flex flex-col items-center justify-center py-16 gap-4">
+          <div
+            className="w-16 h-16 rounded-full flex items-center justify-center"
+            style={{ backgroundColor: 'rgba(239, 68, 68, 0.1)' }}
+          >
+            <AlertTriangle className="w-8 h-8 text-[#EF4444]" />
+          </div>
+          <div className="text-center">
+            <h3 className="text-white font-semibold text-lg">Something went wrong</h3>
+            <p className="text-[#64748B] text-sm mt-1 max-w-md">
+              {error}
+            </p>
+          </div>
+          <button
+            onClick={handleRetry}
+            className="flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-lg transition-colors"
+            style={{
+              backgroundColor: activeTabColor,
+              color: '#0A0F1C',
+            }}
+          >
+            <RefreshCw className="w-4 h-4" />
+            Try again
+          </button>
+        </div>
+      )}
+
       {/* Results Grid */}
-      {loading ? (
+      {!error && loading ? (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
           {[...Array(6)].map((_, i) => (
             <div
@@ -313,25 +355,37 @@ export function MarketplacePage({ showHeader = true }: MarketplacePageProps) {
             />
           ))}
         </div>
-      ) : (
+      ) : !error ? (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
           {activeTab === 'listings' &&
             listings.map((listing) => (
-              <ListingCard key={listing.id} listing={listing} />
+              <ListingCard
+                key={listing.id}
+                listing={listing}
+                onClick={() => navigate(`/dashboard/marketplace/listings/${listing.id}`)}
+              />
             ))}
           {activeTab === 'requests' &&
             requests.map((request) => (
-              <RequestCard key={request.id} request={request} />
+              <RequestCard
+                key={request.id}
+                request={request}
+                onClick={() => navigate(`/dashboard/marketplace/requests/${request.id}`)}
+              />
             ))}
           {activeTab === 'auctions' &&
             auctions.map((auction) => (
-              <AuctionCard key={auction.id} auction={auction} />
+              <AuctionCard
+                key={auction.id}
+                auction={auction}
+                onClick={() => navigate(`/dashboard/marketplace/auctions/${auction.id}`)}
+              />
             ))}
         </div>
-      )}
+      ) : null}
 
       {/* Empty State */}
-      {!loading && total === 0 && (
+      {!loading && !error && total === 0 && (
         <div className="flex flex-col items-center justify-center py-16 gap-4">
           <div
             className="w-16 h-16 rounded-full flex items-center justify-center"

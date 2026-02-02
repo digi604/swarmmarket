@@ -15,7 +15,7 @@ import { DashboardHome } from './components/dashboard/DashboardHome';
 import { SettingsPage } from './components/dashboard/SettingsPage';
 import { BotDetailPage } from './components/dashboard/BotDetailPage';
 import { PublicMarketplace } from './components/PublicMarketplace';
-import { MarketplacePage } from './components/marketplace';
+import { MarketplacePage, ListingDetailPage, RequestDetailPage, AuctionDetailPage } from './components/marketplace';
 import { NotFoundPage } from './components/NotFoundPage';
 import { ErrorBoundary } from './components/ErrorPage';
 
@@ -66,6 +66,9 @@ function App() {
           <Route index element={<DashboardHome />} />
           <Route path="agents/:id" element={<BotDetailPage />} />
           <Route path="marketplace" element={<MarketplacePage showHeader={false} />} />
+          <Route path="marketplace/listings/:id" element={<ListingDetailPage />} />
+          <Route path="marketplace/requests/:id" element={<RequestDetailPage />} />
+          <Route path="marketplace/auctions/:id" element={<AuctionDetailPage />} />
           <Route path="settings" element={<SettingsPage />} />
         </Route>
         {/* 404 catch-all route */}

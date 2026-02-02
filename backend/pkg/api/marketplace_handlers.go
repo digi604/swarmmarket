@@ -2,6 +2,7 @@ package api
 
 import (
 	"encoding/json"
+	"log"
 	"net/http"
 	"strconv"
 
@@ -47,21 +48,27 @@ func (h *MarketplaceHandler) CreateListing(w http.ResponseWriter, r *http.Reques
 	common.WriteJSON(w, http.StatusCreated, listing)
 }
 
-// GetListing handles getting a listing by ID.
+// GetListing handles getting a listing by ID or slug.
 func (h *MarketplaceHandler) GetListing(w http.ResponseWriter, r *http.Request) {
-	idStr := chi.URLParam(r, "id")
-	id, err := uuid.Parse(idStr)
-	if err != nil {
-		common.WriteError(w, http.StatusBadRequest, common.ErrBadRequest("invalid listing id"))
-		return
+	idOrSlug := chi.URLParam(r, "id")
+
+	var listing *marketplace.Listing
+	var err error
+
+	// Try parsing as UUID first
+	if id, parseErr := uuid.Parse(idOrSlug); parseErr == nil {
+		listing, err = h.service.GetListing(r.Context(), id)
+	} else {
+		// Fall back to slug lookup
+		listing, err = h.service.GetListingBySlug(r.Context(), idOrSlug)
 	}
 
-	listing, err := h.service.GetListing(r.Context(), id)
 	if err != nil {
 		if err == marketplace.ErrListingNotFound {
 			common.WriteError(w, http.StatusNotFound, common.ErrNotFound("listing not found"))
 			return
 		}
+		log.Printf("[ERROR] GetListing failed: %v (idOrSlug=%s)", err, idOrSlug)
 		common.WriteError(w, http.StatusInternalServerError, common.ErrInternalServer("failed to get listing"))
 		return
 	}
@@ -103,6 +110,7 @@ func (h *MarketplaceHandler) SearchListings(w http.ResponseWriter, r *http.Reque
 
 	result, err := h.service.SearchListings(r.Context(), params)
 	if err != nil {
+		log.Printf("[ERROR] SearchListings failed: %v (query=%q, limit=%d, offset=%d)", err, params.Query, params.Limit, params.Offset)
 		common.WriteError(w, http.StatusInternalServerError, common.ErrInternalServer("failed to search listings"))
 		return
 	}
@@ -130,6 +138,7 @@ func (h *MarketplaceHandler) DeleteListing(w http.ResponseWriter, r *http.Reques
 			common.WriteError(w, http.StatusNotFound, common.ErrNotFound("listing not found"))
 			return
 		}
+		log.Printf("[ERROR] DeleteListing failed: %v (id=%s, agentID=%s)", err, id, agent.ID)
 		common.WriteError(w, http.StatusInternalServerError, common.ErrInternalServer("failed to delete listing"))
 		return
 	}
@@ -164,19 +173,25 @@ func (h *MarketplaceHandler) CreateRequest(w http.ResponseWriter, r *http.Reques
 
 // GetRequest handles getting a request by ID.
 func (h *MarketplaceHandler) GetRequest(w http.ResponseWriter, r *http.Request) {
-	idStr := chi.URLParam(r, "id")
-	id, err := uuid.Parse(idStr)
-	if err != nil {
-		common.WriteError(w, http.StatusBadRequest, common.ErrBadRequest("invalid request id"))
-		return
+	idOrSlug := chi.URLParam(r, "id")
+
+	var request *marketplace.Request
+	var err error
+
+	// Try parsing as UUID first
+	if id, parseErr := uuid.Parse(idOrSlug); parseErr == nil {
+		request, err = h.service.GetRequest(r.Context(), id)
+	} else {
+		// Fall back to slug lookup
+		request, err = h.service.GetRequestBySlug(r.Context(), idOrSlug)
 	}
 
-	request, err := h.service.GetRequest(r.Context(), id)
 	if err != nil {
 		if err == marketplace.ErrRequestNotFound {
 			common.WriteError(w, http.StatusNotFound, common.ErrNotFound("request not found"))
 			return
 		}
+		log.Printf("[ERROR] GetRequest failed: %v (idOrSlug=%s)", err, idOrSlug)
 		common.WriteError(w, http.StatusInternalServerError, common.ErrInternalServer("failed to get request"))
 		return
 	}
@@ -203,6 +218,7 @@ func (h *MarketplaceHandler) SearchRequests(w http.ResponseWriter, r *http.Reque
 
 	result, err := h.service.SearchRequests(r.Context(), params)
 	if err != nil {
+		log.Printf("[ERROR] SearchRequests failed: %v (query=%q, limit=%d, offset=%d)", err, params.Query, params.Limit, params.Offset)
 		common.WriteError(w, http.StatusInternalServerError, common.ErrInternalServer("failed to search requests"))
 		return
 	}
@@ -253,6 +269,7 @@ func (h *MarketplaceHandler) GetOffers(w http.ResponseWriter, r *http.Request) {
 
 	offers, err := h.service.GetOffersByRequest(r.Context(), requestID)
 	if err != nil {
+		log.Printf("[ERROR] GetOffers failed: %v (requestID=%s)", err, requestID)
 		common.WriteError(w, http.StatusInternalServerError, common.ErrInternalServer("failed to get offers"))
 		return
 	}
@@ -290,6 +307,7 @@ func (h *MarketplaceHandler) AcceptOffer(w http.ResponseWriter, r *http.Request)
 func (h *MarketplaceHandler) GetCategories(w http.ResponseWriter, r *http.Request) {
 	categories, err := h.service.GetCategories(r.Context())
 	if err != nil {
+		log.Printf("[ERROR] GetCategories failed: %v", err)
 		common.WriteError(w, http.StatusInternalServerError, common.ErrInternalServer("failed to get categories"))
 		return
 	}
