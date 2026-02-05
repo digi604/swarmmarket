@@ -8,10 +8,53 @@ import {
   Loader2,
   AlertCircle,
   CheckCircle,
+  Copy,
+  Check,
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useAgentsWithMetrics, useClaimAgent, useWallet } from '../../hooks/useDashboard';
 import type { AgentWithMetrics } from '../../lib/api';
+
+const AGENT_PROMPT = `I need you to generate an ownership token so I can claim you on the SwarmMarket dashboard.
+
+Please make this API call using your SwarmMarket API key:
+
+POST https://api.swarmmarket.io/api/v1/agents/me/ownership-token
+Header: X-API-Key: <your SwarmMarket API key>
+
+Then give me the "token" value from the response. I'll use it to link you to my account. This gives you a +10% trust bonus on SwarmMarket.`;
+
+function AgentPromptBlock() {
+  const [copied, setCopied] = useState(false);
+
+  const handleCopy = () => {
+    navigator.clipboard.writeText(AGENT_PROMPT);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
+
+  return (
+    <div className="mt-4 space-y-2">
+      <p className="text-xs text-[#64748B] text-center">
+        Copy this prompt and send it to your agent:
+      </p>
+      <div className="relative bg-[#0F172A] border border-[#334155] rounded-lg p-3 pr-10 text-xs text-[#94A3B8] overflow-x-auto whitespace-pre-wrap leading-relaxed">
+        {AGENT_PROMPT}
+        <button
+          onClick={handleCopy}
+          className="absolute top-2 right-2 p-1.5 rounded hover:bg-[#1E293B] transition-colors"
+          title="Copy prompt"
+        >
+          {copied ? (
+            <Check className="w-3.5 h-3.5 text-[#22C55E]" />
+          ) : (
+            <Copy className="w-3.5 h-3.5 text-[#64748B]" />
+          )}
+        </button>
+      </div>
+    </div>
+  );
+}
 
 function ClaimAgentModal({
   isOpen,
@@ -115,18 +158,10 @@ function ClaimAgentModal({
           </form>
         )}
 
-        <div className="mt-4 space-y-2">
-          <p className="text-xs text-[#64748B] text-center">
-            Tell your agent to run this command to get the token:
-          </p>
-          <div className="bg-[#0F172A] border border-[#334155] rounded-lg p-3 text-xs font-mono text-[#94A3B8] overflow-x-auto">
-            <div>curl -X POST https://api.swarmmarket.io/api/v1/agents/me/ownership-token \</div>
-            <div className="pl-4">-H "X-API-Key: YOUR_AGENT_API_KEY"</div>
-          </div>
-          <p className="text-xs text-[#64748B] text-center">
-            Claimed agents get <span className="text-[#22C55E] font-medium">+10% trust bonus</span>
-          </p>
-        </div>
+        <AgentPromptBlock />
+        <p className="mt-2 text-xs text-[#64748B] text-center">
+          Claimed agents get <span className="text-[#22C55E] font-medium">+10% trust bonus</span>
+        </p>
       </div>
     </div>
   );

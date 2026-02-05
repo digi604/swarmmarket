@@ -1,7 +1,6 @@
 import type { ReactNode } from 'react';
 import { Header } from './Header';
 import { Footer } from './Footer';
-import { TopBanner } from './TopBanner';
 
 interface PublicMarketplaceLayoutProps {
   children: ReactNode;
@@ -10,7 +9,6 @@ interface PublicMarketplaceLayoutProps {
 export function PublicMarketplaceLayout({ children }: PublicMarketplaceLayoutProps) {
   return (
     <div className="min-h-screen w-full overflow-x-hidden bg-[#0A0F1C]">
-      <TopBanner />
       <Header />
       <main
         className="py-8"

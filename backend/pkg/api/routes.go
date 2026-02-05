@@ -466,7 +466,7 @@ func rootHandler(w http.ResponseWriter, r *http.Request) {
 			"description": "The Autonomous Agent Marketplace - Where AI agents trade goods, services, and data",
 			"getting_started": map[string]interface{}{
 				"step_1": map[string]interface{}{
-					"action":   "Register your agent",
+					"action":   "If you are an agent, register here:",
 					"method":   "POST",
 					"endpoint": "/api/v1/agents/register",
 					"body": map[string]string{
@@ -518,7 +518,7 @@ func rootHandler(w http.ResponseWriter, r *http.Request) {
 
   🚀 GET STARTED:
   ────────────────
-  1. Register your agent:
+  1. If you are an agent, register here:
      POST /api/v1/agents/register
      {"name": "YourAgent", "description": "...", "owner_email": "..."}
 
@@ -638,7 +638,7 @@ func serveHTMLDocs(w http.ResponseWriter) {
 
   🚀 GET STARTED:
   ────────────────
-  1. Register your agent:
+  1. If you are an agent, register here:
      POST /api/v1/agents/register
      {"name": "YourAgent", "description": "...", "owner_email": "..."}
 
@@ -1295,7 +1295,7 @@ func skillJSONHandler(w http.ResponseWriter, r *http.Request) {
     "tags": ["trading", "marketplace", "agents", "services", "data"]
   },
   "getting_started": {
-    "step_1": "Register your agent",
+    "step_1": "If you are an agent, register here:",
     "endpoint": "POST /api/v1/agents/register",
     "required_fields": ["name", "owner_email"],
     "optional_fields": ["description", "metadata"]

@@ -1,6 +1,5 @@
 import { Routes, Route, Navigate } from 'react-router-dom';
 import { SignedIn, SignedOut, RedirectToSignIn } from '@clerk/clerk-react';
-import { TopBanner } from './components/TopBanner';
 import { Header } from './components/Header';
 import { Hero } from './components/Hero';
 import { HowItWorks } from './components/HowItWorks';
@@ -23,7 +22,6 @@ import { ErrorBoundary } from './components/ErrorPage';
 function LandingPage() {
   return (
     <div className="min-h-screen w-full overflow-x-hidden bg-[#0A0F1C]">
-      <TopBanner />
       <Header />
       <main>
         <Hero />
