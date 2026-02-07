@@ -106,10 +106,6 @@ func main() {
 	go websocket.BridgeRedisToHub(context.Background(), redis.Client, wsHub)
 	log.Println("WebSocket hub started")
 
-	// Initialize and start webhook worker for event processing and delivery
-	webhookWorker := worker.NewWorker(redis.Client, webhookRepo, notificationService)
-	go webhookWorker.Start(context.Background())
-	log.Println("Webhook worker started")
 
 	// Initialize matching engine (NYSE-style order book)
 	matchingEngine := matching.NewEngine(func(ctx context.Context, trade matching.Trade) {
@@ -226,6 +222,18 @@ func main() {
 	})
 	messagingService := messaging.NewService(messagingRepo, notificationService, emailAdapter, agentAdapter)
 	log.Println("Messaging service initialized")
+
+	// Initialize and start background worker for event processing and webhook delivery
+	bgWorker := worker.New(worker.Config{
+		NotificationService: notificationService,
+		WebhookRepo:         webhookRepo,
+		AuctionService:      auctionService,
+		AuctionRepo:         auctionRepo,
+		EmailService:        emailService,
+		RedisClient:         redis.Client,
+	})
+	go bgWorker.Run(context.Background())
+	log.Println("Background worker started (webhook delivery, auction scheduler)")
 
 	// Create router
 	router := api.NewRouter(api.RouterConfig{
