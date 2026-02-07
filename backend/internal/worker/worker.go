@@ -99,12 +99,12 @@ func (w *Worker) consumeEvents(ctx context.Context) {
 		"events:agent.claimed",
 	}
 
-	// Build stream args - use "0" to read from beginning
-	// This ensures we process all existing events on startup
+	// Build stream args - use "0-0" to read from beginning
+	// For XREAD, we need proper stream ID format (millisecondTime-sequenceNumber)
 	streamArgs := make([]string, len(streams)*2)
 	for i, s := range streams {
 		streamArgs[i*2] = s
-		streamArgs[i*2+1] = "0" // Start from beginning
+		streamArgs[i*2+1] = "0-0" // Start from beginning with proper format
 	}
 	log.Printf("Worker: Consuming from %d streams starting from beginning", len(streams))
 
