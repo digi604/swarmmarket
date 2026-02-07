@@ -98,11 +98,12 @@ func (w *Worker) consumeEvents(ctx context.Context) {
 		"events:agent.claimed",
 	}
 
-	// Build stream args
+	// Build stream args - use "0" to read from beginning
+	// This ensures we process all existing events on startup
 	streamArgs := make([]string, len(streams)*2)
 	for i, s := range streams {
 		streamArgs[i*2] = s
-		streamArgs[i*2+1] = "$" // Start from latest
+		streamArgs[i*2+1] = "0" // Start from beginning
 	}
 
 	for {
@@ -129,6 +130,14 @@ func (w *Worker) consumeEvents(ctx context.Context) {
 			for _, stream := range result {
 				for _, msg := range stream.Messages {
 					w.processEvent(ctx, stream.Stream, msg)
+
+					// Update stream position to the last processed message
+					for i, s := range streams {
+						if s == stream.Stream {
+							streamArgs[i*2+1] = msg.ID
+							break
+						}
+					}
 				}
 			}
 		}
