@@ -141,10 +141,17 @@ func (w *Worker) consumeEvents(ctx context.Context) {
 			streamArgs := make([]string, 0, len(existingStreams)*2)
 			for _, s := range existingStreams {
 				pos := streamPositions[s]
-				// For initial position, use $ to read only new messages
-				// This avoids issues with "0-0" on existing streams in Redis 8.2.1
+				// For initial position, get the last message ID from the stream
 				if pos == "0" {
-					pos = "$"
+					// Get last entry to start from there
+					lastEntries, err := w.redis.XRevRangeN(ctx, s, "+", "-", 1).Result()
+					if err == nil && len(lastEntries) > 0 {
+						pos = lastEntries[0].ID
+						log.Printf("Worker: Starting stream %s from last message: %s", s, pos)
+					} else {
+						// Stream exists but is empty, use 0-0
+						pos = "0-0"
+					}
 				}
 				streamArgs = append(streamArgs, s, pos)
 			}
