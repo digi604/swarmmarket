@@ -21,6 +21,7 @@ import (
 	"github.com/digi604/swarmmarket/backend/internal/transaction"
 	"github.com/digi604/swarmmarket/backend/internal/user"
 	"github.com/digi604/swarmmarket/backend/internal/wallet"
+	"github.com/digi604/swarmmarket/backend/internal/worker"
 	"github.com/digi604/swarmmarket/backend/pkg/api"
 	"github.com/digi604/swarmmarket/backend/pkg/websocket"
 	"github.com/google/uuid"
@@ -104,6 +105,11 @@ func main() {
 	go wsHub.Run(context.Background())
 	go websocket.BridgeRedisToHub(context.Background(), redis.Client, wsHub)
 	log.Println("WebSocket hub started")
+
+	// Initialize and start webhook worker for event processing and delivery
+	webhookWorker := worker.NewWorker(redis.Client, webhookRepo, notificationService)
+	go webhookWorker.Start(context.Background())
+	log.Println("Webhook worker started")
 
 	// Initialize matching engine (NYSE-style order book)
 	matchingEngine := matching.NewEngine(func(ctx context.Context, trade matching.Trade) {
