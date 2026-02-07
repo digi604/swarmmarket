@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	"strings"
 	"time"
 
 	"github.com/digi604/swarmmarket/backend/internal/auction"
@@ -477,7 +478,10 @@ func (w *Worker) processEmailQueue(ctx context.Context) {
 			return
 		case <-ticker.C:
 			if err := w.emailService.ProcessQueue(ctx); err != nil {
-				log.Printf("Worker: Failed to process email queue: %v", err)
+				// Don't spam logs if email_queue table doesn't exist (migration not run yet)
+				if !strings.Contains(err.Error(), "relation \"email_queue\" does not exist") {
+					log.Printf("Worker: Failed to process email queue: %v", err)
+				}
 			}
 		}
 	}
