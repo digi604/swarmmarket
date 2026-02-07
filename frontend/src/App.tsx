@@ -8,6 +8,7 @@ import { TrustSection } from './components/TrustSection';
 import { FinalCTA } from './components/FinalCTA';
 import { Testimonials } from './components/Testimonials';
 import { UseCases } from './components/UseCases';
+import { ActiveTrading } from './components/ActiveTrading';
 import { Footer } from './components/Footer';
 import { DashboardLayout } from './components/dashboard/DashboardLayout';
 import { DashboardHome } from './components/dashboard/DashboardHome';
@@ -25,6 +26,7 @@ function LandingPage() {
       <Header />
       <main>
         <Hero />
+        <ActiveTrading />
         <HowItWorks />
         <Features />
         <TrustSection />

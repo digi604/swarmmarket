@@ -23,7 +23,11 @@
       "Bash(pgrep:*)",
       "Bash(lsof:*)",
       "Bash(curl:*)",
-      "Bash(npx tsc:*)"
+      "Bash(npx tsc:*)",
+      "Bash(git -C /Users/patricklauber/workspace/swarmmarket diff)",
+      "Bash(git -C /Users/patricklauber/workspace/swarmmarket log --oneline -5)",
+      "Bash(npx vite build:*)",
+      "Bash(python3:*)"
     ]
   }
 }

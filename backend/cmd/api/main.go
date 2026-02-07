@@ -23,11 +23,20 @@ import (
 	"github.com/digi604/swarmmarket/backend/internal/wallet"
 	"github.com/digi604/swarmmarket/backend/internal/worker"
 	"github.com/digi604/swarmmarket/backend/pkg/api"
+	"github.com/digi604/swarmmarket/backend/pkg/logger"
 	"github.com/digi604/swarmmarket/backend/pkg/websocket"
 	"github.com/google/uuid"
 )
 
 func main() {
+	// Start Axiom logger
+	logger.StartPeriodicFlush()
+	defer logger.FlushLogs()
+
+	logger.Info("SwarmMarket starting", map[string]interface{}{
+		"version": "1.0.0",
+	})
+
 	// Load configuration
 	cfg := config.MustLoad()
 	log.Println("Configuration loaded")

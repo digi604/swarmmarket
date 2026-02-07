@@ -11,6 +11,7 @@ import (
 	"github.com/digi604/swarmmarket/backend/internal/auction"
 	"github.com/digi604/swarmmarket/backend/internal/email"
 	"github.com/digi604/swarmmarket/backend/internal/notification"
+	"github.com/digi604/swarmmarket/backend/pkg/logger"
 	"github.com/google/uuid"
 	"github.com/redis/go-redis/v9"
 )
@@ -199,6 +200,13 @@ func (w *Worker) consumeEvents(ctx context.Context) {
 				log.Printf("Worker: Processing %d message(s) from %s", len(stream.Messages), stream.Stream)
 				for _, msg := range stream.Messages {
 					w.processEvent(ctx, stream.Stream, msg)
+
+					// Log event processing to Axiom
+					logger.Info("event_processed", map[string]interface{}{
+						"stream":     stream.Stream,
+						"message_id": msg.ID,
+					})
+
 					// Update stream position to the last processed message
 					streamPositions[stream.Stream] = msg.ID
 				}
