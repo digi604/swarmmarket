@@ -41,7 +41,6 @@ export function Particles() {
     let mouseAttractorStrength = 0;
     const mouseWorld = new THREE.Vector3(0, 0, 0);
     let currentScrollY = window.scrollY;
-    let targetCameraAngle = 0;
     let currentCameraAngle = 0;
 
     // -- Scene --
@@ -299,6 +298,7 @@ export function Particles() {
 
     // -- Events: listen on window so hero content overlay doesn't block --
     function onMouseMove(e: MouseEvent) {
+      if (!container) return;
       const rect = container.getBoundingClientRect();
       const x = e.clientX - rect.left;
       const y = e.clientY - rect.top;
