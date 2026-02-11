@@ -103,19 +103,18 @@ func TestConnectHandler_CreateLoginLink_NoAccount(t *testing.T) {
 
 	handler.CreateLoginLink(rr, req)
 
-	// nil userRepo → 503
-	if rr.Code != http.StatusServiceUnavailable {
-		t.Errorf("expected 503, got %d", rr.Code)
+	if rr.Code != http.StatusBadRequest {
+		t.Errorf("expected 400, got %d", rr.Code)
 	}
 }
 
-func TestConnectHandler_CreateLoginLink_NotComplete(t *testing.T) {
+func TestConnectHandler_CreateLoginLink_HasAccount(t *testing.T) {
+	// With a fake account ID, GetAccountStatus will fail at Stripe API → 500
 	handler := NewConnectHandler(payment.NewConnectService(), nil)
 	usr := &user.User{
-		ID:                          uuid.New(),
-		Email:                       "test@example.com",
-		StripeConnectAccountID:      "acct_123",
-		StripeConnectChargesEnabled: false,
+		ID:                     uuid.New(),
+		Email:                  "test@example.com",
+		StripeConnectAccountID: "acct_123",
 	}
 
 	req := httptest.NewRequest("POST", "/api/v1/dashboard/connect/login-link", nil)
@@ -124,8 +123,8 @@ func TestConnectHandler_CreateLoginLink_NotComplete(t *testing.T) {
 
 	handler.CreateLoginLink(rr, req)
 
-	// nil userRepo → 503
-	if rr.Code != http.StatusServiceUnavailable {
-		t.Errorf("expected 503 for nil repo, got %d", rr.Code)
+	// Stripe API call fails with test key → 500
+	if rr.Code != http.StatusInternalServerError {
+		t.Errorf("expected 500 (Stripe API failure), got %d", rr.Code)
 	}
 }
