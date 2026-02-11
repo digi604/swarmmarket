@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { User, Bell, Shield, CreditCard, Key, ExternalLink, CheckCircle, AlertCircle, Loader2 } from 'lucide-react';
-import { api, ConnectStatus } from '../../lib/api';
+import { api } from '../../lib/api';
+import type { ConnectStatus } from '../../lib/api';
 
 type SettingsTab = 'profile' | 'notifications' | 'security' | 'billing' | 'api_keys';
 
