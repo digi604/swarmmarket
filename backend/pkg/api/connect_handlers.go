@@ -101,12 +101,23 @@ func (h *ConnectHandler) CreateLoginLink(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	if usr.StripeConnectAccountID == "" || !usr.StripeConnectChargesEnabled {
+	// Re-fetch user from DB to get latest charges_enabled (webhook may have updated it after auth)
+	if h.userRepo == nil {
+		common.WriteError(w, http.StatusServiceUnavailable, common.ErrInternalServer("service unavailable"))
+		return
+	}
+	freshUser, err := h.userRepo.GetUserByID(r.Context(), usr.ID)
+	if err != nil || freshUser == nil {
+		common.WriteError(w, http.StatusInternalServerError, common.ErrInternalServer("failed to load user"))
+		return
+	}
+
+	if freshUser.StripeConnectAccountID == "" || !freshUser.StripeConnectChargesEnabled {
 		common.WriteError(w, http.StatusBadRequest, common.ErrBadRequest("connect onboarding not complete"))
 		return
 	}
 
-	url, err := h.connectService.CreateLoginLink(r.Context(), usr.StripeConnectAccountID)
+	url, err := h.connectService.CreateLoginLink(r.Context(), freshUser.StripeConnectAccountID)
 	if err != nil {
 		common.WriteError(w, http.StatusInternalServerError, common.ErrInternalServer("failed to create login link"))
 		return

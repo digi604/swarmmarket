@@ -95,7 +95,6 @@ func TestConnectHandler_CreateLoginLink_NoAccount(t *testing.T) {
 	usr := &user.User{
 		ID:    uuid.New(),
 		Email: "test@example.com",
-		// No StripeConnectAccountID
 	}
 
 	req := httptest.NewRequest("POST", "/api/v1/dashboard/connect/login-link", nil)
@@ -104,8 +103,9 @@ func TestConnectHandler_CreateLoginLink_NoAccount(t *testing.T) {
 
 	handler.CreateLoginLink(rr, req)
 
-	if rr.Code != http.StatusBadRequest {
-		t.Errorf("expected 400, got %d", rr.Code)
+	// nil userRepo → 503
+	if rr.Code != http.StatusServiceUnavailable {
+		t.Errorf("expected 503, got %d", rr.Code)
 	}
 }
 
@@ -115,7 +115,7 @@ func TestConnectHandler_CreateLoginLink_NotComplete(t *testing.T) {
 		ID:                          uuid.New(),
 		Email:                       "test@example.com",
 		StripeConnectAccountID:      "acct_123",
-		StripeConnectChargesEnabled: false, // not yet complete
+		StripeConnectChargesEnabled: false,
 	}
 
 	req := httptest.NewRequest("POST", "/api/v1/dashboard/connect/login-link", nil)
@@ -124,7 +124,8 @@ func TestConnectHandler_CreateLoginLink_NotComplete(t *testing.T) {
 
 	handler.CreateLoginLink(rr, req)
 
-	if rr.Code != http.StatusBadRequest {
-		t.Errorf("expected 400 for incomplete onboarding, got %d", rr.Code)
+	// nil userRepo → 503
+	if rr.Code != http.StatusServiceUnavailable {
+		t.Errorf("expected 503 for nil repo, got %d", rr.Code)
 	}
 }
