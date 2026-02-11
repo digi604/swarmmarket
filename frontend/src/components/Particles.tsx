@@ -24,6 +24,15 @@ import {
   max,
 } from 'three/tsl';
 
+// Attractor configs shared by GPU and CPU paths
+const ATTRACTORS = [
+  { pos: [-3, 0, 0], rot: [0, 1, 0] },
+  { pos: [3, 0, -1.5], rot: [0, 1, 0] },
+  { pos: [0, 1, 3], rot: [...new THREE.Vector3(1, 0, -0.5).normalize().toArray()] },
+] as const;
+
+const P = { mass: 1e7, pMass: 1e4, spin: 2.75, maxSpd: 8, damp: 0.1, bounds: 14, G: 6.67e-11 };
+
 export function Particles() {
   const containerRef = useRef<HTMLDivElement>(null);
 
@@ -35,7 +44,6 @@ export function Particles() {
     let initialized = false;
     let isVisible = true;
 
-    // -- State --
     const mouse = new THREE.Vector2(0, 0);
     let mouseOnCanvas = false;
     let mouseAttractorStrength = 0;
@@ -43,19 +51,16 @@ export function Particles() {
     let currentScrollY = window.scrollY;
     let currentCameraAngle = 0;
 
-    // -- Scene --
     const scene = new THREE.Scene();
     const camera = new THREE.PerspectiveCamera(60, 1, 0.1, 100);
     camera.position.set(0, 3, 5);
     camera.lookAt(0, 0, 0);
 
-    const ambientLight = new THREE.AmbientLight('#ffffff', 0.5);
-    scene.add(ambientLight);
-    const directionalLight = new THREE.DirectionalLight('#ffffff', 1.5);
-    directionalLight.position.set(4, 2, 0);
-    scene.add(directionalLight);
+    scene.add(new THREE.AmbientLight('#ffffff', 0.5));
+    const dirLight = new THREE.DirectionalLight('#ffffff', 1.5);
+    dirLight.position.set(4, 2, 0);
+    scene.add(dirLight);
 
-    // -- Renderer --
     const renderer = new THREE.WebGPURenderer({ antialias: true });
     renderer.setClearColor(0x0a0f1c, 1);
     container.appendChild(renderer.domElement);
@@ -63,247 +68,260 @@ export function Particles() {
     renderer.domElement.style.height = '100%';
     renderer.domElement.style.display = 'block';
 
-    // -- Raycaster for mouse → 3D --
     const raycaster = new THREE.Raycaster();
     const groundPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
     const intersectPoint = new THREE.Vector3();
 
-    // -- Particles (40% fewer: ~78K) --
-    const count = 2 ** 17; // 131072
+    let geo: THREE.PlaneGeometry | null = null;
+    let mat: THREE.SpriteNodeMaterial | null = null;
 
-    // Physics uniforms
-    const attractorMassUniform = uniform(1e7);
-    const particleGlobalMassUniform = uniform(1e4);
-    const spinningStrengthUniform = uniform(2.75);
-    const maxSpeedUniform = uniform(8);
-    const velocityDampingUniform = uniform(0.1);
-    const scaleUniform = uniform(0.008);
-    const boundHalfExtentUniform = uniform(14);
-    const colorAUniform = uniform(color('#5900ff'));
-    const colorBUniform = uniform(color('#ffa575'));
-
-    // Mouse attractor uniform (position + strength)
-    const mousePositionUniform = uniform(new THREE.Vector3(0, 0, 0));
-    const mouseStrengthUniform = uniform(0);
-
-    // Static attractors (positions and rotation axes as vec4 arrays)
-    const staticPositions = [
-      new THREE.Vector4(-3, 0, 0, 0),
-      new THREE.Vector4(3, 0, -1.5, 0),
-      new THREE.Vector4(0, 1, 3, 0),
-    ];
-    const staticRotAxes = [
-      new THREE.Vector4(0, 1, 0, 0),
-      new THREE.Vector4(0, 1, 0, 0),
-      new THREE.Vector4(...new THREE.Vector3(1, 0, -0.5).normalize().toArray(), 0),
-    ];
-
-    // Storage buffers for positions and velocities
-    const positionArray = new THREE.StorageInstancedBufferAttribute(count, 3);
-    const velocityArray = new THREE.StorageInstancedBufferAttribute(count, 3);
-
-    const positionStorage = storage(positionArray, 'vec3', count);
-    const velocityStorage = storage(velocityArray, 'vec3', count);
-
-    // Attractor data as storage buffers
-    const attractorPosData = new Float32Array(3 * 4);
-    const attractorRotData = new Float32Array(3 * 4);
-    for (let i = 0; i < 3; i++) {
-      attractorPosData[i * 4] = staticPositions[i].x;
-      attractorPosData[i * 4 + 1] = staticPositions[i].y;
-      attractorPosData[i * 4 + 2] = staticPositions[i].z;
-      attractorPosData[i * 4 + 3] = 0;
-      attractorRotData[i * 4] = staticRotAxes[i].x;
-      attractorRotData[i * 4 + 1] = staticRotAxes[i].y;
-      attractorRotData[i * 4 + 2] = staticRotAxes[i].z;
-      attractorRotData[i * 4 + 3] = 0;
+    function updateSharedState() {
+      const target = mouseOnCanvas ? 1 : 0;
+      mouseAttractorStrength += (target - mouseAttractorStrength) * 0.05;
+      if (mouseOnCanvas) {
+        raycaster.setFromCamera(mouse, camera);
+        const hit = raycaster.ray.intersectPlane(groundPlane, intersectPoint);
+        if (hit) mouseWorld.lerp(intersectPoint, 0.15);
+      }
+      const scrollRatio = Math.min(currentScrollY / 800, 1);
+      currentCameraAngle += (scrollRatio - currentCameraAngle) * 0.15;
+      const z = 1 - currentCameraAngle * 0.7;
+      camera.position.set(0, 3 * z, 5 * z);
+      camera.lookAt(0, 0, 0);
     }
-    const attractorPosAttr = new THREE.StorageBufferAttribute(attractorPosData, 4);
-    const attractorRotAttr = new THREE.StorageBufferAttribute(attractorRotData, 4);
-    const attractorPosStorage = storage(attractorPosAttr, 'vec4', 3).toReadOnly();
-    const attractorRotStorage = storage(attractorRotAttr, 'vec4', 3).toReadOnly();
 
-    // -- Init Compute: randomize positions & velocities --
-    const initFn = Fn(() => {
-      const idx = instanceIndex;
-      const seed = float(idx).mul(0.000007629).add(0.5).fract();
-      const seed2 = float(idx).mul(0.000013).add(0.3).fract();
-      const seed3 = float(idx).mul(0.000019).add(0.7).fract();
-      const seed4 = float(idx).mul(0.000029).add(0.1).fract();
-      const seed5 = float(idx).mul(0.000037).add(0.9).fract();
+    // ── WebGPU path: compute shaders, 131K particles ──
 
-      // Spawn particles near the 3 static attractors
-      // Each particle picks one attractor based on its index
-      const attractorIdx = float(idx).mod(3).floor();
-      // Attractor centers: (-3,0,0), (3,0,-1.5), (0,1,3)
-      const ax = attractorIdx.equal(0).select(-3, attractorIdx.equal(1).select(3, 0));
-      const ay = attractorIdx.equal(0).select(0, attractorIdx.equal(1).select(0, 1));
-      const az = attractorIdx.equal(0).select(0, attractorIdx.equal(1).select(-1.5, 3));
+    function setupGPU() {
+      const count = 2 ** 17; // 131072
 
-      // Spread around attractor with some randomness
-      const px = ax.add(sub(seed, 0.5).mul(4));
-      const py = ay.add(sub(seed2, 0.5).mul(4));
-      const pz = az.add(sub(seed3, 0.5).mul(4));
-      positionStorage.element(idx).assign(vec3(px, py, pz));
+      const attractorMassUniform = uniform(P.mass);
+      const particleGlobalMassUniform = uniform(P.pMass);
+      const spinningStrengthUniform = uniform(P.spin);
+      const maxSpeedUniform = uniform(P.maxSpd);
+      const velocityDampingUniform = uniform(P.damp);
+      const scaleUniform = uniform(0.008);
+      const boundHalfExtentUniform = uniform(P.bounds);
+      const colorAUniform = uniform(color('#5900ff'));
+      const colorBUniform = uniform(color('#ffa575'));
+      const mousePositionUniform = uniform(new THREE.Vector3(0, 0, 0));
+      const mouseStrengthUniform = uniform(0);
 
-      const phi = seed4.mul(Math.PI * 2);
-      const theta = seed5.mul(2);
-      const sinPhi = phi.sin();
-      const vx = sinPhi.mul(theta.sin()).mul(0.3);
-      const vy = phi.cos().mul(0.3);
-      const vz = sinPhi.mul(theta.cos()).mul(0.3);
-      velocityStorage.element(idx).assign(vec3(vx, vy, vz));
-    });
+      const attractorPosData = new Float32Array(12);
+      const attractorRotData = new Float32Array(12);
+      for (let i = 0; i < 3; i++) {
+        attractorPosData.set(ATTRACTORS[i].pos, i * 4);
+        attractorRotData.set(ATTRACTORS[i].rot, i * 4);
+      }
+      const attractorPosStorage = storage(new THREE.StorageBufferAttribute(attractorPosData, 4), 'vec4', 3).toReadOnly();
+      const attractorRotStorage = storage(new THREE.StorageBufferAttribute(attractorRotData, 4), 'vec4', 3).toReadOnly();
 
-    const initCompute = initFn().compute(count);
+      const positionArray = new THREE.StorageInstancedBufferAttribute(count, 3);
+      const velocityArray = new THREE.StorageInstancedBufferAttribute(count, 3);
+      const positionStorage = storage(positionArray, 'vec3', count);
+      const velocityStorage = storage(velocityArray, 'vec3', count);
 
-    // -- Update Compute: physics --
-    const updateFn = Fn(() => {
-      const delta = float(1 / 60);
-      const idx = instanceIndex;
-      const position = positionStorage.element(idx).toVar();
-      const velocity = velocityStorage.element(idx).toVar();
+      const initCompute = Fn(() => {
+        const idx = instanceIndex;
+        const s1 = float(idx).mul(0.000007629).add(0.5).fract();
+        const s2 = float(idx).mul(0.000013).add(0.3).fract();
+        const s3 = float(idx).mul(0.000019).add(0.7).fract();
+        const s4 = float(idx).mul(0.000029).add(0.1).fract();
+        const s5 = float(idx).mul(0.000037).add(0.9).fract();
+        const ai = float(idx).mod(3).floor();
+        const ax = ai.equal(0).select(-3, ai.equal(1).select(3, 0));
+        const ay = ai.equal(0).select(0, ai.equal(1).select(0, 1));
+        const az = ai.equal(0).select(0, ai.equal(1).select(-1.5, 3));
+        positionStorage.element(idx).assign(vec3(ax.add(sub(s1, 0.5).mul(4)), ay.add(sub(s2, 0.5).mul(4)), az.add(sub(s3, 0.5).mul(4))));
+        const phi = s4.mul(Math.PI * 2);
+        const sinPhi = phi.sin();
+        velocityStorage.element(idx).assign(vec3(sinPhi.mul(s5.mul(2).sin()).mul(0.3), phi.cos().mul(0.3), sinPhi.mul(s5.mul(2).cos()).mul(0.3)));
+      })().compute(count);
 
-      const massSeed = float(idx).mul(0.000007629).add(0.5).fract();
-      const particleMassMultiplier = massSeed.mul(0.75).add(0.25);
-      const particleMass = particleMassMultiplier.mul(particleGlobalMassUniform);
+      const updateCompute = Fn(() => {
+        const delta = float(1 / 60);
+        const idx = instanceIndex;
+        const position = positionStorage.element(idx).toVar();
+        const velocity = velocityStorage.element(idx).toVar();
+        const pMass = float(idx).mul(0.000007629).add(0.5).fract().mul(0.75).add(0.25).mul(particleGlobalMassUniform);
+        const Gc = float(P.G);
+        const force = vec3(0, 0, 0).toVar();
+        Loop(3, ({ i }) => {
+          const aPos = attractorPosStorage.element(i).xyz;
+          const aRot = attractorRotStorage.element(i).xyz;
+          const toA = sub(aPos, position);
+          const dist = max(length(toA), 0.1);
+          const gStr = div(mul(attractorMassUniform, mul(pMass, Gc)), mul(dist, dist));
+          force.addAssign(mul(normalize(toA), gStr));
+          force.addAssign(cross(mul(aRot, mul(gStr, spinningStrengthUniform)), toA));
+        });
+        const toM = sub(mousePositionUniform, position);
+        const mDist = max(length(toM), 0.1);
+        const mGrav = div(mul(mul(attractorMassUniform, 1.25), mul(pMass, Gc)), mul(mDist, mDist)).mul(mouseStrengthUniform);
+        force.addAssign(mul(normalize(toM), mGrav));
+        force.addAssign(cross(mul(vec3(0, 1, 0), mul(mGrav, spinningStrengthUniform)), toM));
+        velocity.addAssign(mul(force, delta));
+        If(length(velocity).greaterThan(maxSpeedUniform), () => { velocity.assign(mul(normalize(velocity), maxSpeedUniform)); });
+        velocity.mulAssign(sub(1, velocityDampingUniform));
+        position.addAssign(mul(velocity, delta));
+        const half = div(boundHalfExtentUniform, 2);
+        position.assign(sub(mod(add(position, half), boundHalfExtentUniform), half));
+        positionStorage.element(idx).assign(position);
+        velocityStorage.element(idx).assign(velocity);
+      })().compute(count);
 
-      const G = float(6.67e-11);
-      const force = vec3(0, 0, 0).toVar();
+      mat = new THREE.SpriteNodeMaterial({ blending: THREE.AdditiveBlending, depthWrite: false });
+      mat.positionNode = positionStorage.toAttribute();
+      mat.colorNode = Fn(() => {
+        const spd = length(velocityStorage.toAttribute());
+        return vec4(mix(colorAUniform, colorBUniform, smoothstep(0, 0.5, div(spd, maxSpeedUniform))), 1);
+      })();
+      mat.scaleNode = Fn(() => float(instanceIndex).mul(0.000007629).add(0.5).fract().mul(0.75).add(0.25).mul(scaleUniform))();
 
-      // Static attractors
-      Loop(3, ({ i }) => {
-        const attractorPos = attractorPosStorage.element(i).xyz;
-        const attractorRot = attractorRotStorage.element(i).xyz;
+      geo = new THREE.PlaneGeometry(1, 1);
+      scene.add(new THREE.InstancedMesh(geo, mat, count));
 
-        const toAttractor = sub(attractorPos, position);
-        const dist = max(length(toAttractor), 0.1);
-        const direction = normalize(toAttractor);
-
-        const gravityStrength = div(
-          mul(attractorMassUniform, mul(particleMass, G)),
-          mul(dist, dist)
-        );
-        const gravityForce = mul(direction, gravityStrength);
-        force.addAssign(gravityForce);
-
-        const spinForce = mul(attractorRot, mul(gravityStrength, spinningStrengthUniform));
-        const spinVelocity = cross(spinForce, toAttractor);
-        force.addAssign(spinVelocity);
+      renderer.compute(initCompute);
+      renderer.setAnimationLoop(() => {
+        if (!isVisible) return;
+        updateSharedState();
+        mouseStrengthUniform.value = mouseAttractorStrength;
+        (mousePositionUniform.value as THREE.Vector3).copy(mouseWorld);
+        renderer.compute(updateCompute);
+        renderer.render(scene, camera);
       });
+    }
 
-      // Mouse attractor — always compute, scale by strength uniform
-      const toMouse = sub(mousePositionUniform, position);
-      const mouseDist = max(length(toMouse), 0.1);
-      const mouseDir = normalize(toMouse);
+    // ── CPU fallback for WebGL2 backend (avoids broken transform feedback on NVIDIA Linux) ──
 
-      const mouseMass = mul(attractorMassUniform, 1.25); // 5/4 = 1.25x base (was 5x)
-      const mouseGravity = div(
-        mul(mouseMass, mul(particleMass, G)),
-        mul(mouseDist, mouseDist)
-      ).mul(mouseStrengthUniform);
+    function setupCPU() {
+      const count = 2 ** 14; // 16384
+      const posAttr = new THREE.StorageInstancedBufferAttribute(count, 3);
+      const velAttr = new THREE.StorageInstancedBufferAttribute(count, 3);
+      const pos = posAttr.array as Float32Array;
+      const vel = velAttr.array as Float32Array;
 
-      force.addAssign(mul(mouseDir, mouseGravity));
+      for (let idx = 0; idx < count; idx++) {
+        const s1 = (idx * 0.000007629 + 0.5) % 1;
+        const s2 = (idx * 0.000013 + 0.3) % 1;
+        const s3 = (idx * 0.000019 + 0.7) % 1;
+        const s4 = (idx * 0.000029 + 0.1) % 1;
+        const s5 = (idx * 0.000037 + 0.9) % 1;
+        const a = ATTRACTORS[idx % 3];
+        const i3 = idx * 3;
+        pos[i3] = a.pos[0] + (s1 - 0.5) * 4;
+        pos[i3 + 1] = a.pos[1] + (s2 - 0.5) * 4;
+        pos[i3 + 2] = a.pos[2] + (s3 - 0.5) * 4;
+        const phi = s4 * Math.PI * 2;
+        const sinPhi = Math.sin(phi);
+        vel[i3] = sinPhi * Math.sin(s5 * 2) * 0.3;
+        vel[i3 + 1] = Math.cos(phi) * 0.3;
+        vel[i3 + 2] = sinPhi * Math.cos(s5 * 2) * 0.3;
+      }
 
-      const mouseRotAxis = vec3(0, 1, 0);
-      const mouseSpinForce = mul(mouseRotAxis, mul(mouseGravity, spinningStrengthUniform));
-      force.addAssign(cross(mouseSpinForce, toMouse));
+      const posS = storage(posAttr, 'vec3', count);
+      const velS = storage(velAttr, 'vec3', count);
+      const maxSpeedU = uniform(P.maxSpd);
+      const colorAU = uniform(color('#5900ff'));
+      const colorBU = uniform(color('#ffa575'));
+      const scaleU = uniform(0.008);
 
-      // Velocity update
-      velocity.addAssign(mul(force, delta));
-      const speed = length(velocity);
-      If(speed.greaterThan(maxSpeedUniform), () => {
-        velocity.assign(mul(normalize(velocity), maxSpeedUniform));
+      mat = new THREE.SpriteNodeMaterial({ blending: THREE.AdditiveBlending, depthWrite: false });
+      mat.positionNode = posS.toAttribute();
+      mat.colorNode = Fn(() => {
+        const spd = length(velS.toAttribute());
+        return vec4(mix(colorAU, colorBU, smoothstep(0, 0.5, div(spd, maxSpeedU))), 1);
+      })();
+      mat.scaleNode = Fn(() => float(instanceIndex).mul(0.000007629).add(0.5).fract().mul(0.75).add(0.25).mul(scaleU))();
+
+      geo = new THREE.PlaneGeometry(1, 1);
+      scene.add(new THREE.InstancedMesh(geo, mat, count));
+
+      renderer.setAnimationLoop(() => {
+        if (!isVisible) return;
+        updateSharedState();
+        cpuPhysics(pos, vel, count);
+        posAttr.needsUpdate = true;
+        velAttr.needsUpdate = true;
+        renderer.render(scene, camera);
       });
-      velocity.mulAssign(sub(1, velocityDampingUniform));
+    }
 
-      // Position update
-      position.addAssign(mul(velocity, delta));
+    function cpuPhysics(pos: Float32Array, vel: Float32Array, count: number) {
+      const dt = 1 / 60;
+      const mouseStr = mouseAttractorStrength;
+      const half = P.bounds / 2;
+      const dampF = 1 - P.damp;
 
-      // Toroidal wrapping
-      const halfExtent = div(boundHalfExtentUniform, 2);
-      position.assign(sub(mod(add(position, halfExtent), boundHalfExtentUniform), halfExtent));
+      for (let idx = 0; idx < count; idx++) {
+        const i3 = idx * 3;
+        let px = pos[i3], py = pos[i3 + 1], pz = pos[i3 + 2];
+        let vx = vel[i3], vy = vel[i3 + 1], vz = vel[i3 + 2];
+        const pMass = ((idx * 0.000007629 + 0.5) % 1 * 0.75 + 0.25) * P.pMass;
+        let fx = 0, fy = 0, fz = 0;
 
-      positionStorage.element(idx).assign(position);
-      velocityStorage.element(idx).assign(velocity);
-    });
+        for (let a = 0; a < 3; a++) {
+          const ap = ATTRACTORS[a].pos, ar = ATTRACTORS[a].rot;
+          const dx = ap[0] - px, dy = ap[1] - py, dz = ap[2] - pz;
+          const dist = Math.max(Math.sqrt(dx * dx + dy * dy + dz * dz), 0.1);
+          const inv = 1 / dist;
+          const gStr = (P.mass * pMass * P.G) / (dist * dist);
+          fx += dx * inv * gStr; fy += dy * inv * gStr; fz += dz * inv * gStr;
+          const sf = gStr * P.spin;
+          // cross(rot * sf, toAttractor)
+          fx += ar[1] * sf * dz - ar[2] * sf * dy;
+          fy += ar[2] * sf * dx - ar[0] * sf * dz;
+          fz += ar[0] * sf * dy - ar[1] * sf * dx;
+        }
 
-    const updateCompute = updateFn().compute(count);
+        if (mouseStr > 0.001) {
+          const mx = mouseWorld.x - px, my = mouseWorld.y - py, mz = mouseWorld.z - pz;
+          const md = Math.max(Math.sqrt(mx * mx + my * my + mz * mz), 0.1);
+          const mg = (P.mass * 1.25 * pMass * P.G) / (md * md) * mouseStr;
+          const mi = 1 / md;
+          fx += mx * mi * mg; fy += my * mi * mg; fz += mz * mi * mg;
+          const ms = mg * P.spin;
+          // cross((0, ms, 0), (mx, my, mz))
+          fx += ms * mz; fz -= ms * mx;
+        }
 
-    // -- Material --
-    const material = new THREE.SpriteNodeMaterial({
-      blending: THREE.AdditiveBlending,
-      depthWrite: false,
-    });
+        vx += fx * dt; vy += fy * dt; vz += fz * dt;
+        const spd = Math.sqrt(vx * vx + vy * vy + vz * vz);
+        if (spd > P.maxSpd) { const s = P.maxSpd / spd; vx *= s; vy *= s; vz *= s; }
+        vx *= dampF; vy *= dampF; vz *= dampF;
 
-    material.positionNode = positionStorage.toAttribute();
+        px += vx * dt; py += vy * dt; pz += vz * dt;
+        // Toroidal wrapping: (pos + half) mod bounds - half
+        px = (((px + half) % P.bounds) + P.bounds) % P.bounds - half;
+        py = (((py + half) % P.bounds) + P.bounds) % P.bounds - half;
+        pz = (((pz + half) % P.bounds) + P.bounds) % P.bounds - half;
 
-    material.colorNode = Fn(() => {
-      const vel = velocityStorage.toAttribute();
-      const speed = length(vel);
-      const colorMix = smoothstep(0, 0.5, div(speed, maxSpeedUniform));
-      const finalColor = mix(colorAUniform, colorBUniform, colorMix);
-      return vec4(finalColor, 1);
-    })();
+        pos[i3] = px; pos[i3 + 1] = py; pos[i3 + 2] = pz;
+        vel[i3] = vx; vel[i3 + 1] = vy; vel[i3 + 2] = vz;
+      }
+    }
 
-    material.scaleNode = Fn(() => {
-      const massSeed = float(instanceIndex).mul(0.000007629).add(0.5).fract();
-      return massSeed.mul(0.75).add(0.25).mul(scaleUniform);
-    })();
-
-    // -- Mesh --
-    const geometry = new THREE.PlaneGeometry(1, 1);
-    const mesh = new THREE.InstancedMesh(geometry, material, count);
-    scene.add(mesh);
-
-    // -- Init --
     async function init() {
       await renderer.init();
       if (disposed) return;
       initialized = true;
-      renderer.compute(initCompute);
-      renderer.setAnimationLoop(animate);
-    }
 
-    // -- Animate --
-    function animate() {
-      if (!isVisible) return;
-
-      // Lerp mouse attractor strength
-      const targetStrength = mouseOnCanvas ? 1 : 0;
-      mouseAttractorStrength += (targetStrength - mouseAttractorStrength) * 0.05;
-      mouseStrengthUniform.value = mouseAttractorStrength;
-
-      // Update mouse world position via raycasting
-      if (mouseOnCanvas) {
-        raycaster.setFromCamera(mouse, camera);
-        const hit = raycaster.ray.intersectPlane(groundPlane, intersectPoint);
-        if (hit) {
-          mouseWorld.lerp(intersectPoint, 0.15);
-          (mousePositionUniform.value as THREE.Vector3).copy(mouseWorld);
-        }
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const useGPU = !!(renderer as any).backend?.isWebGPUBackend;
+      if (useGPU) {
+        setupGPU();
+      } else {
+        setupCPU();
       }
-
-      // Scroll → zoom in (camera moves closer)
-      const scrollRatio = Math.min(currentScrollY / 800, 1); // 0 to 1 over 800px scroll
-      const targetZoom = scrollRatio;
-      currentCameraAngle += (targetZoom - currentCameraAngle) * 0.15;
-      const zoomFactor = 1 - currentCameraAngle * 0.7; // zooms in up to 70%
-      camera.position.set(0, 3 * zoomFactor, 5 * zoomFactor);
-      camera.lookAt(0, 0, 0);
-
-      renderer.compute(updateCompute);
-      renderer.render(scene, camera);
     }
 
-    // -- Events: listen on window so hero content overlay doesn't block --
+    // ── Events ──
+
     function onMouseMove(e: MouseEvent) {
       if (!container) return;
       const rect = container.getBoundingClientRect();
       const x = e.clientX - rect.left;
       const y = e.clientY - rect.top;
-
-      // Check if mouse is within the container bounds
       if (x >= 0 && x <= rect.width && y >= 0 && y <= rect.height) {
         mouse.x = (x / rect.width) * 2 - 1;
         mouse.y = -(y / rect.height) * 2 + 1;
@@ -313,19 +331,13 @@ export function Particles() {
       }
     }
 
-    function onMouseLeave() {
-      mouseOnCanvas = false;
-    }
-
-    function onScroll() {
-      currentScrollY = window.scrollY;
-    }
+    function onMouseLeave() { mouseOnCanvas = false; }
+    function onScroll() { currentScrollY = window.scrollY; }
 
     window.addEventListener('mousemove', onMouseMove);
     document.addEventListener('mouseleave', onMouseLeave);
     window.addEventListener('scroll', onScroll, { passive: true });
 
-    // -- Resize --
     function handleResize(entries: ResizeObserverEntry[]) {
       const entry = entries[0];
       if (!entry) return;
@@ -340,7 +352,6 @@ export function Particles() {
     const resizeObserver = new ResizeObserver(handleResize);
     resizeObserver.observe(container);
 
-    // -- Visibility: pause when hero scrolls out of view --
     const visibilityObserver = new IntersectionObserver(
       ([entry]) => { isVisible = entry.isIntersecting; },
       { threshold: 0 }
@@ -367,8 +378,8 @@ export function Particles() {
       window.removeEventListener('scroll', onScroll);
       if (initialized) {
         try {
-          geometry.dispose();
-          material.dispose();
+          geo?.dispose();
+          mat?.dispose();
           renderer.dispose();
         } catch { /* renderer node tracking may already be torn down */ }
       }
