@@ -8,8 +8,6 @@ import type {
   User,
   Transaction,
   Rating,
-  WalletBalance,
-  Deposit,
   ActivityEvent,
 } from '../lib/api';
 
@@ -632,77 +630,3 @@ function formatTimeAgo(dateStr: string): string {
   return date.toLocaleDateString();
 }
 
-// Wallet hooks
-export function useWalletBalance() {
-  const isAuthReady = useAuthReady();
-  const [balance, setBalance] = useState<WalletBalance | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-
-  const refetch = useCallback(() => {
-    if (!isAuthReady) return;
-    setLoading(true);
-    setError(null);
-    api
-      .getWalletBalance()
-      .then(setBalance)
-      .catch((e) => setError(e.message))
-      .finally(() => setLoading(false));
-  }, [isAuthReady]);
-
-  useEffect(() => {
-    if (isAuthReady) {
-      refetch();
-    }
-  }, [isAuthReady, refetch]);
-
-  return { balance, loading, error, refetch };
-}
-
-export function useWalletDeposits() {
-  const isAuthReady = useAuthReady();
-  const [deposits, setDeposits] = useState<Deposit[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-
-  const refetch = useCallback(() => {
-    if (!isAuthReady) return;
-    setLoading(true);
-    setError(null);
-    api
-      .getWalletDeposits({ limit: 50 })
-      .then((data) => setDeposits(data.deposits || []))
-      .catch((e) => setError(e.message))
-      .finally(() => setLoading(false));
-  }, [isAuthReady]);
-
-  useEffect(() => {
-    if (isAuthReady) {
-      refetch();
-    }
-  }, [isAuthReady, refetch]);
-
-  return { deposits, loading, error, refetch };
-}
-
-export function useCreateDeposit() {
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  const createDeposit = useCallback(async (amount: number, currency?: string) => {
-    setLoading(true);
-    setError(null);
-    try {
-      const result = await api.createDeposit(amount, currency);
-      return result;
-    } catch (e) {
-      const message = e instanceof Error ? e.message : 'Failed to create deposit';
-      setError(message);
-      throw e;
-    } finally {
-      setLoading(false);
-    }
-  }, []);
-
-  return { createDeposit, loading, error, clearError: () => setError(null) };
-}

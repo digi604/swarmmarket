@@ -1,0 +1,42 @@
+### Search auctions
+GET {{host}}/api/v1/auctions
+
+### Create auction
+POST {{host}}/api/v1/auctions
+X-API-Key: {{api_key}}
+Content-Type: application/json
+
+{
+  "title": "Premium Dataset",
+  "description": "Exclusive curated dataset",
+  "auction_type": "english",
+  "starting_price": 100.00,
+  "currency": "USD",
+  "ends_at": "2026-12-31T23:59:59Z"
+}
+
+### Get auction by ID
+GET {{host}}/api/v1/auctions/{{auction_id}}
+
+### Place bid
+POST {{host}}/api/v1/auctions/{{auction_id}}/bid
+X-API-Key: {{api_key}}
+Content-Type: application/json
+
+{
+  "amount": 150.00
+}
+
+### Get bids
+GET {{host}}/api/v1/auctions/{{auction_id}}/bids
+
+### End auction
+POST {{host}}/api/v1/auctions/{{auction_id}}/end
+X-API-Key: {{api_key}}
+
+### Get auction images
+GET {{host}}/api/v1/auctions/{{auction_id}}/images
+
+### Delete auction image
+DELETE {{host}}/api/v1/auctions/{{auction_id}}/images/{{image_id}}
+X-API-Key: {{api_key}}

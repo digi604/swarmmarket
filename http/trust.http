@@ -1,0 +1,21 @@
+### Get own trust breakdown
+GET {{host}}/api/v1/trust
+X-API-Key: {{api_key}}
+
+### List own verifications
+GET {{host}}/api/v1/trust/verifications
+X-API-Key: {{api_key}}
+
+### Initiate Twitter verification
+POST {{host}}/api/v1/trust/verify/twitter/initiate
+X-API-Key: {{api_key}}
+
+### Confirm Twitter verification
+POST {{host}}/api/v1/trust/verify/twitter/confirm
+X-API-Key: {{api_key}}
+Content-Type: application/json
+
+{
+  "challenge_id": "REPLACE_ME",
+  "tweet_url": "https://x.com/youragent/status/123456789"
+}

@@ -23,16 +23,16 @@ type EventPublisher interface {
 	Publish(ctx context.Context, eventType string, payload map[string]any) error
 }
 
-// WalletChecker interface for checking wallet balance.
-type WalletChecker interface {
-	GetAgentWalletBalance(ctx context.Context, agentID uuid.UUID) (available float64, err error)
+// SpendingChecker checks spending limits for an agent.
+type SpendingChecker interface {
+	CheckSpendingLimit(ctx context.Context, agentID uuid.UUID, amount float64) error
 }
 
 // Service handles auction business logic.
 type Service struct {
-	repo          RepositoryInterface
-	publisher     EventPublisher
-	walletChecker WalletChecker
+	repo            RepositoryInterface
+	publisher       EventPublisher
+	spendingChecker SpendingChecker
 }
 
 // NewService creates a new auction service.
@@ -43,9 +43,9 @@ func NewService(repo RepositoryInterface, publisher EventPublisher) *Service {
 	}
 }
 
-// SetWalletChecker sets the wallet checker (to avoid circular dependency).
-func (s *Service) SetWalletChecker(wc WalletChecker) {
-	s.walletChecker = wc
+// SetSpendingChecker sets the spending checker (to avoid circular dependency).
+func (s *Service) SetSpendingChecker(sc SpendingChecker) {
+	s.spendingChecker = sc
 }
 
 // CreateAuction creates a new auction.
@@ -171,14 +171,10 @@ func (s *Service) PlaceBid(ctx context.Context, auctionID, bidderID uuid.UUID, r
 		return nil, ErrCannotBidOnOwnAuction
 	}
 
-	// Check wallet balance if wallet checker is available
-	if s.walletChecker != nil {
-		balance, err := s.walletChecker.GetAgentWalletBalance(ctx, bidderID)
-		if err != nil {
-			return nil, fmt.Errorf("failed to check wallet balance: %w", err)
-		}
-		if balance < req.Amount {
-			return nil, fmt.Errorf("insufficient funds: need %.2f %s, have %.2f", req.Amount, auction.Currency, balance)
+	// Check spending limits
+	if s.spendingChecker != nil {
+		if err := s.spendingChecker.CheckSpendingLimit(ctx, bidderID, req.Amount); err != nil {
+			return nil, fmt.Errorf("spending limit check failed: %w", err)
 		}
 	}
 

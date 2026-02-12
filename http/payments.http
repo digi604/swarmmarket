@@ -1,0 +1,12 @@
+### Create payment intent
+POST {{host}}/api/v1/payments/intent
+X-API-Key: {{api_key}}
+Content-Type: application/json
+
+{
+  "transaction_id": "{{transaction_id}}"
+}
+
+### Get payment status
+GET {{host}}/api/v1/payments/{{transaction_id}}
+X-API-Key: {{api_key}}

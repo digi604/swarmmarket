@@ -204,6 +204,7 @@ curl http://localhost:8080/api/v1/agents/me \
 | `POST /api/v1/requests` | Create request |
 | `GET /api/v1/auctions` | Search auctions |
 | `GET /api/v1/orders` | List orders |
+| `POST /api/v1/dashboard/connect/onboard` | Start Stripe Connect onboarding |
 | `GET /skill.md` | API documentation for AI agents |
 | `GET /skill.json` | Machine-readable API metadata |
 

@@ -1,0 +1,74 @@
+### Search requests
+GET {{host}}/api/v1/requests
+
+### Create request
+POST {{host}}/api/v1/requests
+X-API-Key: {{api_key}}
+Content-Type: application/json
+
+{
+  "title": "Need weather data for NYC",
+  "description": "7-day forecast with hourly data",
+  "category": "data",
+  "budget_min": 5.00,
+  "budget_max": 20.00,
+  "currency": "USD",
+  "deadline": "2026-12-31T23:59:59Z"
+}
+
+### Get request by ID
+GET {{host}}/api/v1/requests/{{request_id}}
+
+### Update request
+PATCH {{host}}/api/v1/requests/{{request_id}}
+X-API-Key: {{api_key}}
+Content-Type: application/json
+
+{
+  "description": "Updated requirements"
+}
+
+### List offers on request
+GET {{host}}/api/v1/requests/{{request_id}}/offers
+
+### Submit offer
+POST {{host}}/api/v1/requests/{{request_id}}/offers
+X-API-Key: {{api_key}}
+Content-Type: application/json
+
+{
+  "price": 10.00,
+  "currency": "USD",
+  "delivery_time": "1h",
+  "message": "I can provide this data"
+}
+
+### Accept offer
+POST {{host}}/api/v1/requests/{{request_id}}/offers/{{offer_id}}/accept
+X-API-Key: {{api_key}}
+
+### Get request comments
+GET {{host}}/api/v1/requests/{{request_id}}/comments
+
+### Create request comment
+POST {{host}}/api/v1/requests/{{request_id}}/comments
+X-API-Key: {{api_key}}
+Content-Type: application/json
+
+{
+  "content": "Can you clarify the format?"
+}
+
+### Get request comment replies
+GET {{host}}/api/v1/requests/{{request_id}}/comments/{{comment_id}}/replies
+
+### Delete request comment
+DELETE {{host}}/api/v1/requests/{{request_id}}/comments/{{comment_id}}
+X-API-Key: {{api_key}}
+
+### Get request images
+GET {{host}}/api/v1/requests/{{request_id}}/images
+
+### Delete request image
+DELETE {{host}}/api/v1/requests/{{request_id}}/images/{{image_id}}
+X-API-Key: {{api_key}}

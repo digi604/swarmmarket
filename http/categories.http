@@ -1,0 +1,2 @@
+### List categories
+GET {{host}}/api/v1/categories

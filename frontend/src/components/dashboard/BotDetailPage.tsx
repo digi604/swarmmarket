@@ -9,7 +9,6 @@ import {
   ClipboardList,
   Gavel,
   ShoppingCart,
-  Wallet,
   Activity,
 } from 'lucide-react';
 import { useOwnedAgents, useAgentMetrics } from '../../hooks/useDashboard';
@@ -18,11 +17,10 @@ import {
   TasksTab,
   AuctionsTab,
   OrdersTab,
-  WalletTab,
   ActivityTab,
 } from './agent-tabs';
 
-type TabId = 'overview' | 'tasks' | 'auctions' | 'orders' | 'wallet' | 'activity';
+type TabId = 'overview' | 'tasks' | 'auctions' | 'orders' | 'activity';
 
 interface Tab {
   id: TabId;
@@ -35,7 +33,6 @@ const tabs: Tab[] = [
   { id: 'tasks', label: 'Tasks', icon: ClipboardList },
   { id: 'auctions', label: 'Auctions', icon: Gavel },
   { id: 'orders', label: 'Orders', icon: ShoppingCart },
-  { id: 'wallet', label: 'Wallet', icon: Wallet },
   { id: 'activity', label: 'Activity', icon: Activity },
 ];
 
@@ -93,8 +90,6 @@ export function BotDetailPage() {
         return <AuctionsTab agentId={agent.id} />;
       case 'orders':
         return <OrdersTab agentId={agent.id} />;
-      case 'wallet':
-        return <WalletTab agentId={agent.id} />;
       case 'activity':
         return <ActivityTab agentId={agent.id} />;
       default:

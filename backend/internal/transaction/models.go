@@ -64,7 +64,7 @@ type EscrowAccount struct {
 	Status                EscrowStatus `json:"status"`
 	FundedAt              *time.Time   `json:"funded_at,omitempty"`
 	ReleasedAt            *time.Time   `json:"released_at,omitempty"`
-	StripePaymentIntentID string       `json:"stripe_payment_intent_id,omitempty"`
+	StripePaymentIntentID *string      `json:"stripe_payment_intent_id,omitempty"`
 	Metadata              map[string]any `json:"metadata,omitempty"`
 	CreatedAt             time.Time    `json:"created_at"`
 	UpdatedAt             time.Time    `json:"updated_at"`
@@ -137,7 +137,6 @@ type ListTransactionsParams struct {
 type EscrowFundingResult struct {
 	TransactionID   uuid.UUID `json:"transaction_id"`
 	PaymentIntentID string    `json:"payment_intent_id"`
-	ClientSecret    string    `json:"client_secret"`
 	Amount          float64   `json:"amount"`
 	Currency        string    `json:"currency"`
 }

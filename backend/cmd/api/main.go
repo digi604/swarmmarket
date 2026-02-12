@@ -16,11 +16,11 @@ import (
 	"github.com/digi604/swarmmarket/backend/internal/messaging"
 	"github.com/digi604/swarmmarket/backend/internal/notification"
 	"github.com/digi604/swarmmarket/backend/internal/payment"
+	"github.com/digi604/swarmmarket/backend/internal/spending"
 	"github.com/digi604/swarmmarket/backend/internal/storage"
 	"github.com/digi604/swarmmarket/backend/internal/task"
 	"github.com/digi604/swarmmarket/backend/internal/transaction"
 	"github.com/digi604/swarmmarket/backend/internal/user"
-	"github.com/digi604/swarmmarket/backend/internal/wallet"
 	"github.com/digi604/swarmmarket/backend/internal/worker"
 	"github.com/digi604/swarmmarket/backend/pkg/api"
 	"github.com/digi604/swarmmarket/backend/pkg/logger"
@@ -130,8 +130,30 @@ func main() {
 	})
 	log.Println("Matching engine initialized")
 
+	// Initialize user repository and service (for human dashboard + Connect)
+	var userService *user.Service
+	var userRepo *user.Repository
+	if cfg.Clerk.SecretKey != "" {
+		userRepo = user.NewRepository(db.Pool)
+		userService = user.NewService(userRepo)
+		log.Println("User service initialized (Clerk authentication enabled)")
+	} else {
+		log.Println("Clerk not configured - dashboard endpoints disabled")
+	}
+
+	// Initialize spending limits service
+	spendingRepo := spending.NewRepository(db.Pool)
+	spendingService := spending.NewService(spendingRepo)
+	log.Println("Spending service initialized")
+
+	// Wire spending checker to marketplace and auction services
+	marketplaceService.SetSpendingChecker(spendingService)
+	auctionService.SetSpendingChecker(spendingService)
+	log.Println("Spending checker wired to marketplace and auction services")
+
 	// Initialize payment service (Stripe)
 	var paymentService *payment.Service
+	var connectService *payment.ConnectService
 	if cfg.Stripe.SecretKey != "" {
 		paymentService = payment.NewService(payment.Config{
 			SecretKey:          cfg.Stripe.SecretKey,
@@ -139,40 +161,20 @@ func main() {
 			PlatformFeePercent: cfg.Stripe.PlatformFeePercent,
 			DefaultReturnURL:   cfg.Stripe.DefaultReturnURL,
 		})
-		// Wire payment adapter to transaction service for escrow
 		paymentAdapter := payment.NewAdapter(paymentService)
+		if userRepo != nil {
+			paymentAdapter.SetConnectAccountResolver(userRepo)
+			paymentAdapter.SetPaymentMethodResolver(userRepo)
+		}
+		paymentAdapter.SetSpendingChecker(spendingService)
 		transactionService.SetPaymentService(paymentAdapter)
 		marketplaceService.SetPaymentCreator(paymentAdapter)
-		log.Println("Stripe payment service initialized and wired to transactions and marketplace")
+		log.Println("Stripe payment service initialized with off-session support")
+
+		connectService = payment.NewConnectService()
+		log.Println("Stripe Connect service initialized")
 	} else {
 		log.Println("Stripe not configured - payment endpoints disabled")
-	}
-
-	// Initialize user service (for human dashboard)
-	var userService *user.Service
-	if cfg.Clerk.SecretKey != "" {
-		userRepo := user.NewRepository(db.Pool)
-		userService = user.NewService(userRepo)
-		log.Println("User service initialized (Clerk authentication enabled)")
-	} else {
-		log.Println("Clerk not configured - dashboard endpoints disabled")
-	}
-
-	// Initialize wallet service (for deposits)
-	var walletService *wallet.Service
-	if cfg.Stripe.SecretKey != "" {
-		walletRepo := wallet.NewRepository(db.Pool)
-		walletService = wallet.NewService(walletRepo, wallet.StripeConfig{
-			SecretKey: cfg.Stripe.SecretKey,
-		})
-		log.Println("Wallet service initialized")
-
-		// Wire wallet balance checker to marketplace and auction services
-		// This enforces that agents have sufficient funds before accepting offers or placing bids
-		balanceChecker := wallet.NewBalanceChecker(walletService)
-		marketplaceService.SetWalletChecker(balanceChecker)
-		auctionService.SetWalletChecker(balanceChecker)
-		log.Println("Wallet balance checker wired to marketplace and auction services")
 	}
 
 	// Initialize storage service (Cloudflare R2 for images)
@@ -254,13 +256,15 @@ func main() {
 		AuctionService:      auctionService,
 		MatchingEngine:      matchingEngine,
 		PaymentService:      paymentService,
-		WalletService:       walletService,
+		SpendingService:     spendingService,
 		TaskService:         taskService,
 		MessagingService:    messagingService,
 		WebhookRepo:         webhookRepo,
 		NotificationService: notificationService,
 		WebSocketHub:        wsHub,
 		UserService:         userService,
+		UserRepo:            userRepo,
+		ConnectService:      connectService,
 		StorageService:      storageService,
 		ImageRepo:           imageRepo,
 		DB:                  db,

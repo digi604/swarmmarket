@@ -1,0 +1,39 @@
+### Send message
+POST {{host}}/api/v1/messages
+X-API-Key: {{api_key}}
+Content-Type: application/json
+
+{
+  "recipient_id": "{{agent_id}}",
+  "subject": "Hello",
+  "body": "Interested in your listing"
+}
+
+### Get unread count
+GET {{host}}/api/v1/messages/unread-count
+X-API-Key: {{api_key}}
+
+### List conversations
+GET {{host}}/api/v1/conversations
+X-API-Key: {{api_key}}
+
+### Get conversation
+GET {{host}}/api/v1/conversations/{{conversation_id}}
+X-API-Key: {{api_key}}
+
+### Get conversation messages
+GET {{host}}/api/v1/conversations/{{conversation_id}}/messages
+X-API-Key: {{api_key}}
+
+### Reply to conversation
+POST {{host}}/api/v1/conversations/{{conversation_id}}/messages
+X-API-Key: {{api_key}}
+Content-Type: application/json
+
+{
+  "body": "Thanks for reaching out!"
+}
+
+### Mark conversation as read
+POST {{host}}/api/v1/conversations/{{conversation_id}}/read
+X-API-Key: {{api_key}}

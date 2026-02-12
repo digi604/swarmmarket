@@ -181,11 +181,8 @@ export function ListingDetailPage() {
       const qty = parseInt(quantity || '1');
       const result = await api.purchaseListing(listing.id, qty);
 
-      // Navigate to transaction page to complete payment
-      // The transaction page will handle the Stripe payment flow
-      navigate(`/dashboard/transactions/${result.transaction_id}`, {
-        state: { clientSecret: result.client_secret },
-      });
+      // Navigate to transaction page — payment is charged off-session automatically
+      navigate(`/dashboard/transactions/${result.transaction_id}`);
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Purchase failed';
       setPurchaseError(message);

@@ -11,7 +11,7 @@ import (
 	"github.com/digi604/swarmmarket/backend/internal/common"
 	"github.com/digi604/swarmmarket/backend/internal/payment"
 	"github.com/digi604/swarmmarket/backend/internal/transaction"
-	"github.com/digi604/swarmmarket/backend/internal/wallet"
+	"github.com/digi604/swarmmarket/backend/internal/user"
 	"github.com/digi604/swarmmarket/backend/pkg/middleware"
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
@@ -26,24 +26,27 @@ const webhookTimestampTolerance = 5 * time.Minute
 type PaymentHandler struct {
 	paymentService     *payment.Service
 	transactionService *transaction.Service
-	walletService      *wallet.Service
+	userRepo           *user.Repository
 	webhookSecret      string
 }
 
 // NewPaymentHandler creates a new payment handler.
-func NewPaymentHandler(paymentService *payment.Service, transactionService *transaction.Service, walletService *wallet.Service, webhookSecret string) *PaymentHandler {
+func NewPaymentHandler(paymentService *payment.Service, transactionService *transaction.Service, webhookSecret string) *PaymentHandler {
 	return &PaymentHandler{
 		paymentService:     paymentService,
 		transactionService: transactionService,
-		walletService:      walletService,
 		webhookSecret:      webhookSecret,
 	}
 }
 
-// CreatePaymentRequest is the request body for creating a payment.
+// SetUserRepo sets the user repository for Connect webhook handling.
+func (h *PaymentHandler) SetUserRepo(repo *user.Repository) {
+	h.userRepo = repo
+}
+
+// CreatePaymentIntentRequest is the request body for creating a payment.
 type CreatePaymentIntentRequest struct {
 	TransactionID string `json:"transaction_id"`
-	ReturnURL     string `json:"return_url"` // URL to redirect after payment confirmation
 }
 
 // CreatePaymentIntent handles POST /payments/intent - create payment intent for escrow.
@@ -95,7 +98,6 @@ func (h *PaymentHandler) CreatePaymentIntent(w http.ResponseWriter, r *http.Requ
 		SellerID:      tx.SellerID,
 		Amount:        tx.Amount,
 		Currency:      tx.Currency,
-		ReturnURL:     req.ReturnURL,
 	})
 	if err != nil {
 		common.WriteError(w, http.StatusInternalServerError, common.ErrInternalServer("failed to create payment"))
@@ -169,23 +171,25 @@ func (h *PaymentHandler) HandleWebhook(w http.ResponseWriter, r *http.Request) {
 	// Handle different event types
 	switch event.Type {
 	case "payment_intent.succeeded":
-		// Payment authorized - update escrow status
 		h.handlePaymentSucceeded(r.Context(), event.Data.Raw)
 
 	case "payment_intent.payment_failed":
-		// Payment failed
 		h.handlePaymentFailed(r.Context(), event.Data.Raw)
 
 	case "charge.refunded":
-		// Refund processed
 		h.handleRefund(r.Context(), event.Data.Raw)
+
+	case "account.updated":
+		h.handleAccountUpdated(r.Context(), event.Data.Raw)
+
+	case "setup_intent.succeeded":
+		h.handleSetupIntentSucceeded(r.Context(), event.Data.Raw)
 	}
 
 	w.WriteHeader(http.StatusOK)
 }
 
 func (h *PaymentHandler) handlePaymentSucceeded(ctx context.Context, data []byte) {
-	// Parse payment intent from webhook data
 	var pi struct {
 		ID       string            `json:"id"`
 		Metadata map[string]string `json:"metadata"`
@@ -195,17 +199,6 @@ func (h *PaymentHandler) handlePaymentSucceeded(ctx context.Context, data []byte
 		return
 	}
 
-	// Check if this is a wallet deposit
-	if pi.Metadata["type"] == "wallet_deposit" {
-		if h.walletService != nil {
-			if err := h.walletService.HandlePaymentIntentSucceeded(ctx, pi.ID); err != nil {
-				fmt.Printf("[Stripe Webhook] Failed to handle wallet deposit: %v\n", err)
-			}
-		}
-		return
-	}
-
-	// Handle transaction payment
 	transactionIDStr, ok := pi.Metadata["transaction_id"]
 	if !ok {
 		return
@@ -216,8 +209,6 @@ func (h *PaymentHandler) handlePaymentSucceeded(ctx context.Context, data []byte
 		return
 	}
 
-	// For manual capture (escrow), "succeeded" means funds are captured
-	// For automatic capture or when status is "requires_capture", mark as funded
 	if pi.Status == "requires_capture" || pi.Status == "succeeded" {
 		h.transactionService.ConfirmEscrowFunded(ctx, transactionID, pi.ID)
 	}
@@ -240,17 +231,6 @@ func (h *PaymentHandler) handlePaymentFailed(ctx context.Context, data []byte) {
 		failureReason = pi.LastPaymentError.Message
 	}
 
-	// Check if this is a wallet deposit
-	if pi.Metadata["type"] == "wallet_deposit" {
-		if h.walletService != nil {
-			if err := h.walletService.HandlePaymentIntentFailed(ctx, pi.ID, failureReason); err != nil {
-				fmt.Printf("[Stripe Webhook] Failed to handle wallet deposit failure: %v\n", err)
-			}
-		}
-		return
-	}
-
-	// Handle transaction payment failure
 	transactionIDStr, ok := pi.Metadata["transaction_id"]
 	if !ok {
 		return
@@ -261,14 +241,11 @@ func (h *PaymentHandler) handlePaymentFailed(ctx context.Context, data []byte) {
 		return
 	}
 
-	// Get transaction and publish failure event
 	tx, err := h.transactionService.GetTransaction(ctx, transactionID)
 	if err != nil {
 		return
 	}
 
-	// Publish payment failed event for notification
-	// The transaction stays in "pending" - buyer can retry
 	h.transactionService.PublishPaymentFailed(ctx, tx, pi.ID, failureReason)
 }
 
@@ -293,4 +270,50 @@ func (h *PaymentHandler) handleRefund(ctx context.Context, data []byte) {
 
 	// Mark transaction as refunded
 	h.transactionService.RefundTransaction(ctx, transactionID)
+}
+
+func (h *PaymentHandler) handleSetupIntentSucceeded(ctx context.Context, data []byte) {
+	if h.userRepo == nil {
+		return
+	}
+
+	var si struct {
+		Customer      string `json:"customer"`
+		PaymentMethod string `json:"payment_method"`
+	}
+	if err := json.Unmarshal(data, &si); err != nil {
+		return
+	}
+
+	if si.Customer == "" || si.PaymentMethod == "" {
+		return
+	}
+
+	if err := h.userRepo.SetStripeDefaultPaymentMethod(ctx, si.Customer, si.PaymentMethod); err != nil {
+		fmt.Printf("[Stripe Webhook] setup_intent.succeeded: failed to save payment method for %s: %v\n", si.Customer, err)
+	}
+}
+
+func (h *PaymentHandler) handleAccountUpdated(ctx context.Context, data []byte) {
+	if h.userRepo == nil {
+		return
+	}
+
+	var acct struct {
+		ID             string `json:"id"`
+		ChargesEnabled bool   `json:"charges_enabled"`
+	}
+	if err := json.Unmarshal(data, &acct); err != nil {
+		return
+	}
+
+	usr, err := h.userRepo.GetUserByStripeConnectAccountID(ctx, acct.ID)
+	if err != nil {
+		fmt.Printf("[Stripe Webhook] account.updated: user not found for %s: %v\n", acct.ID, err)
+		return
+	}
+
+	if err := h.userRepo.SetStripeConnectChargesEnabled(ctx, usr.ID, acct.ChargesEnabled); err != nil {
+		fmt.Printf("[Stripe Webhook] account.updated: failed to update charges_enabled for %s: %v\n", acct.ID, err)
+	}
 }

@@ -8,13 +8,17 @@ import (
 
 // User represents a human user authenticated via Clerk.
 type User struct {
-	ID          uuid.UUID  `json:"id"`
-	ClerkUserID string     `json:"clerk_user_id"`
-	Email       string     `json:"email"`
-	Name        string     `json:"name,omitempty"`
-	AvatarURL   string     `json:"avatar_url,omitempty"`
-	CreatedAt   time.Time  `json:"created_at"`
-	UpdatedAt   time.Time  `json:"updated_at"`
+	ID                          uuid.UUID `json:"id"`
+	ClerkUserID                 string    `json:"clerk_user_id"`
+	Email                       string    `json:"email"`
+	Name                        string    `json:"name,omitempty"`
+	AvatarURL                   string    `json:"avatar_url,omitempty"`
+	StripeConnectAccountID        string    `json:"stripe_connect_account_id,omitempty"`
+	StripeConnectChargesEnabled   bool      `json:"stripe_connect_charges_enabled"`
+	StripeCustomerID              string    `json:"stripe_customer_id,omitempty"`
+	StripeDefaultPaymentMethodID  string    `json:"stripe_default_payment_method_id,omitempty"`
+	CreatedAt                   time.Time `json:"created_at"`
+	UpdatedAt                   time.Time `json:"updated_at"`
 }
 
 // OwnershipToken represents a token for claiming agent ownership.

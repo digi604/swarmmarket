@@ -1,6 +1,8 @@
 package payment
 
 import (
+	"context"
+	"errors"
 	"testing"
 
 	"github.com/google/uuid"
@@ -51,7 +53,6 @@ func TestCreatePaymentRequest(t *testing.T) {
 func TestPaymentResult(t *testing.T) {
 	result := &PaymentResult{
 		PaymentIntentID: "pi_test_123",
-		ClientSecret:    "pi_test_123_secret_abc",
 		Status:          "requires_capture",
 		Amount:          50.00,
 		Currency:        "USD",
@@ -127,25 +128,19 @@ func TestConfig(t *testing.T) {
 }
 
 func TestErrors(t *testing.T) {
-	// Verify error messages
-	if ErrPaymentFailed.Error() != "payment failed" {
-		t.Errorf("unexpected error message: %s", ErrPaymentFailed.Error())
+	errors := map[error]string{
+		ErrPaymentFailed:    "payment failed",
+		ErrRefundFailed:     "refund failed",
+		ErrTransferFailed:   "transfer failed",
+		ErrInvalidAmount:    "invalid amount",
+		ErrInvalidCurrency:  "invalid currency",
+		ErrSellerNotPayable: "seller is not set up to receive payments",
 	}
 
-	if ErrRefundFailed.Error() != "refund failed" {
-		t.Errorf("unexpected error message: %s", ErrRefundFailed.Error())
-	}
-
-	if ErrTransferFailed.Error() != "transfer failed" {
-		t.Errorf("unexpected error message: %s", ErrTransferFailed.Error())
-	}
-
-	if ErrInvalidAmount.Error() != "invalid amount" {
-		t.Errorf("unexpected error message: %s", ErrInvalidAmount.Error())
-	}
-
-	if ErrInvalidCurrency.Error() != "invalid currency" {
-		t.Errorf("unexpected error message: %s", ErrInvalidCurrency.Error())
+	for err, expected := range errors {
+		if err.Error() != expected {
+			t.Errorf("unexpected error message: got %q, want %q", err.Error(), expected)
+		}
 	}
 }
 
@@ -183,6 +178,110 @@ func TestAdapter(t *testing.T) {
 
 	if adapter.service != service {
 		t.Error("expected adapter to reference service")
+	}
+}
+
+// mockResolver implements ConnectAccountResolver for testing.
+type mockResolver struct {
+	accounts map[uuid.UUID]string
+	err      error
+}
+
+func (m *mockResolver) GetConnectAccountIDForAgent(_ context.Context, agentID uuid.UUID) (string, error) {
+	if m.err != nil {
+		return "", m.err
+	}
+	return m.accounts[agentID], nil
+}
+
+func TestAdapterSetConnectAccountResolver(t *testing.T) {
+	service := NewService(Config{SecretKey: "sk_test_xxx"})
+	adapter := NewAdapter(service)
+
+	if adapter.resolver != nil {
+		t.Error("expected nil resolver initially")
+	}
+
+	resolver := &mockResolver{}
+	adapter.SetConnectAccountResolver(resolver)
+
+	if adapter.resolver == nil {
+		t.Error("expected resolver to be set")
+	}
+}
+
+func TestAdapterCreateEscrowPayment_NoResolver(t *testing.T) {
+	// Without resolver, adapter should not set SellerStripeAccountID
+	// (can't test full Stripe call without live keys, but can verify resolver isn't called)
+	service := NewService(Config{SecretKey: "sk_test_xxx"})
+	adapter := NewAdapter(service)
+
+	// No resolver set — adapter.resolver is nil
+	// CreateEscrowPayment will fail at Stripe API level (invalid key), but shouldn't panic
+	_, err := adapter.CreateEscrowPayment(context.Background(),
+		uuid.New().String(), uuid.New().String(), uuid.New().String(),
+		10.0, "USD",
+	)
+	// Expected to fail (test Stripe key), but not with ErrSellerNotPayable
+	if err == ErrSellerNotPayable {
+		t.Error("should not get ErrSellerNotPayable without resolver")
+	}
+}
+
+func TestAdapterCreateEscrowPayment_ResolverReturnsEmpty(t *testing.T) {
+	service := NewService(Config{SecretKey: "sk_test_xxx"})
+	adapter := NewAdapter(service)
+
+	sellerID := uuid.New()
+	resolver := &mockResolver{accounts: map[uuid.UUID]string{}}
+	adapter.SetConnectAccountResolver(resolver)
+
+	_, err := adapter.CreateEscrowPayment(context.Background(),
+		uuid.New().String(), uuid.New().String(), sellerID.String(),
+		10.0, "USD",
+	)
+	if err != ErrSellerNotPayable {
+		t.Errorf("expected ErrSellerNotPayable, got %v", err)
+	}
+}
+
+func TestAdapterCreateEscrowPayment_ResolverError(t *testing.T) {
+	service := NewService(Config{SecretKey: "sk_test_xxx"})
+	adapter := NewAdapter(service)
+
+	resolver := &mockResolver{err: errors.New("db connection failed")}
+	adapter.SetConnectAccountResolver(resolver)
+
+	_, err := adapter.CreateEscrowPayment(context.Background(),
+		uuid.New().String(), uuid.New().String(), uuid.New().String(),
+		10.0, "USD",
+	)
+	if err == nil {
+		t.Error("expected error from resolver failure")
+	}
+	if err == ErrSellerNotPayable {
+		t.Error("should not get ErrSellerNotPayable on resolver error")
+	}
+}
+
+func TestAdapterCreateEscrowPayment_ResolverReturnsAccount(t *testing.T) {
+	service := NewService(Config{SecretKey: "sk_test_xxx"})
+	adapter := NewAdapter(service)
+
+	sellerID := uuid.New()
+	resolver := &mockResolver{
+		accounts: map[uuid.UUID]string{sellerID: "acct_seller_123"},
+	}
+	adapter.SetConnectAccountResolver(resolver)
+
+	// Will fail at Stripe API (test key) but should pass the resolver check
+	_, err := adapter.CreateEscrowPayment(context.Background(),
+		uuid.New().String(), uuid.New().String(), sellerID.String(),
+		10.0, "USD",
+	)
+	// Should NOT be ErrSellerNotPayable — it should pass through to Stripe
+	if err == ErrSellerNotPayable {
+		t.Error("should not get ErrSellerNotPayable when resolver returns account")
 	}
 }
 

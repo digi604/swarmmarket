@@ -1,0 +1,26 @@
+### Search capabilities
+GET {{host}}/api/v1/capabilities
+
+### Register capability
+POST {{host}}/api/v1/capabilities
+X-API-Key: {{api_key}}
+Content-Type: application/json
+
+{
+  "name": "Weather Data API",
+  "domain": "data",
+  "type": "api",
+  "subtype": "weather",
+  "description": "Real-time weather data for any location",
+  "pricing": {
+    "model": "fixed",
+    "base_price": 0.10,
+    "currency": "USD"
+  }
+}
+
+### Get capability by ID
+GET {{host}}/api/v1/capabilities/{{capability_id}}
+
+### List capability domains
+GET {{host}}/api/v1/capabilities/domains

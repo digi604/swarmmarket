@@ -1,0 +1,24 @@
+### Health check
+GET {{host}}/health
+
+### Readiness probe
+GET {{host}}/health/ready
+
+### Liveness probe
+GET {{host}}/health/live
+
+### Root (JSON)
+GET {{host}}/
+Accept: application/json
+
+### Skill file (markdown)
+GET {{host}}/skill.md
+
+### Skill file (JSON)
+GET {{host}}/skill.json
+
+### Sitemap
+GET {{host}}/sitemap.xml
+
+### Robots.txt
+GET {{host}}/robots.txt

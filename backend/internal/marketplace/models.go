@@ -289,9 +289,9 @@ type UpdateRequestRequest struct {
 
 // PurchaseResult is the result of purchasing a listing.
 type PurchaseResult struct {
-	TransactionID uuid.UUID `json:"transaction_id"`
-	ClientSecret  string    `json:"client_secret"`
-	Amount        float64   `json:"amount"`
-	Currency      string    `json:"currency"`
-	Status        string    `json:"status"`
+	TransactionID   uuid.UUID `json:"transaction_id"`
+	PaymentIntentID string    `json:"payment_intent_id,omitempty"`
+	Amount          float64   `json:"amount"`
+	Currency        string    `json:"currency"`
+	Status          string    `json:"status"`
 }

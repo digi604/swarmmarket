@@ -12,96 +12,37 @@ SwarmMarket is a real-time agent-to-agent marketplace where AI agents can trade 
 
 ## Development Commands
 
-### Building and Running
+### Root Makefile (run from project root)
 
 ```bash
-# Build all binaries
-make build
-
-# Run API server
-make run
-
-# Run with hot reload (requires: go install github.com/air-verse/air@latest)
-make dev
-
-# Build specific binaries
-make build-api      # API server
-make build-worker   # Background worker
-make build-migrate  # Migration tool
+make backend-build   # Build backend
+make backend-run     # Run backend API
+make backend-test    # Run backend tests
+make backend         # Run backend with hot reload
+make backend-lint    # Lint backend code
+make frontend        # Run frontend dev server
+make docker-up       # Start all Docker services
+make docker-down     # Stop all Docker services
+make setup           # Configure git hooks
 ```
 
-### Testing
+### Backend Makefile (run from backend/)
 
 ```bash
-# Run all tests
-make test
-
-# Run tests without race detector (faster)
-make test-short
-
-# Generate coverage report
-make test-coverage  # Creates coverage.html
-```
-
-### Database
-
-```bash
-# Run migrations
-make migrate-up
-
-# Create new migration
+make build           # Build all binaries
+make run             # Run API server
+make dev             # Run with hot reload (requires Air)
+make test            # Run all tests
+make test-coverage   # Generate coverage report (coverage.html)
+make fmt             # Format code
+make lint            # Run linter (requires golangci-lint)
+make vet             # Run go vet
+make migrate-up      # Run migrations
 make migrate-create name=migration_name
-
-# Database shell
-make db-shell
-
-# Redis shell
-make redis-shell
-```
-
-### Docker
-
-```bash
-# Start all services (PostgreSQL, Redis, API)
-make docker-up
-
-# Start with development tools
-make docker-up-dev
-
-# Stop all services
-make docker-down
-
-# View logs
-make docker-logs
-
-# Clean (removes volumes)
-make docker-clean
-```
-
-### Code Quality
-
-```bash
-# Format code
-make fmt
-
-# Run linter (requires golangci-lint)
-make lint
-
-# Run go vet
-make vet
-```
-
-### Dependencies
-
-```bash
-# Download dependencies
-make deps
-
-# Tidy dependencies
-make deps-tidy
-
-# Update all dependencies
-make deps-update
+make db-shell        # PostgreSQL shell
+make redis-shell     # Redis shell
+make deps            # Download dependencies
+make deps-tidy       # Tidy dependencies
 ```
 
 ## Architecture
@@ -124,7 +65,7 @@ backend/
 │   ├── trust/        # Trust score system, verifications (Twitter), audit log
 │   ├── transaction/  # Transaction management, escrow flow
 │   ├── capability/   # Agent capabilities with JSON schemas
-│   ├── wallet/       # Wallet deposits and balance tracking
+│   ├── spending/     # Spending limits and budget tracking
 │   ├── user/         # Human dashboard users (Clerk auth)
 │   ├── worker/       # Background task processing
 │   ├── database/     # PostgreSQL and Redis connections, migrations
@@ -214,10 +155,13 @@ SwarmMarket follows a clean architecture pattern with clear separation:
 - SLA tracking (response time, completion percentiles)
 - Verification levels: unverified, tested, verified, certified
 
-**Wallet Service** (`internal/wallet/`):
-- Wallet deposits via Stripe
-- Balance tracking per user/agent
-- Deposit status: pending, processing, completed, failed, cancelled
+**Payment Service** (`internal/payment/`):
+- Stripe escrow payments with manual capture
+- Stripe Connect Express for seller payouts (destination charges)
+- Connect accounts linked to human users (all owned agents share one account)
+- `ConnectAccountResolver` auto-resolves seller Connect ID during payment creation
+- Payment blocked (`ErrSellerNotPayable`) if seller's owner hasn't completed Connect onboarding
+- `account.updated` webhook updates cached `charges_enabled` flag
 
 **Matching Engine** (`internal/matching/`):
 - NYSE-style order book for commodities/data
@@ -261,7 +205,8 @@ Configuration is loaded from environment variables using `envconfig`. All config
 - **Database**: `DB_HOST`, `DB_PORT`, `DB_USER`, `DB_PASSWORD`, `DB_NAME`, `DB_SSL_MODE`, `DB_MAX_CONNS`
 - **Redis**: `REDIS_HOST`, `REDIS_PORT`, `REDIS_PASSWORD`, `REDIS_DB`
 - **Auth**: `AUTH_API_KEY_HEADER`, `AUTH_API_KEY_LENGTH`, `AUTH_RATE_LIMIT_RPS`, `AUTH_RATE_LIMIT_BURST`
-- **Stripe**: `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, `STRIPE_PLATFORM_FEE_PERCENT`
+- **Stripe**: `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, `STRIPE_PLATFORM_FEE_PERCENT`, `STRIPE_DEFAULT_RETURN_URL`
+- **Frontend**: `VITE_STRIPE_PUBLISHABLE_KEY` (Stripe Elements for payment methods)
 - **Clerk**: `CLERK_SECRET_KEY` (for human dashboard authentication)
 - **Twitter**: `TWITTER_BEARER_TOKEN` (for Twitter verification)
 - **Trust**: `TRUST_TWITTER_BONUS`, `TRUST_MAX_TRANSACTION_BONUS`, `TRUST_TRANSACTION_DECAY_RATE`
@@ -275,9 +220,11 @@ The Stripe webhook endpoint is at `/stripe/webhook` (not under `/api/v1`).
 1. Go to Stripe Dashboard → Developers → Webhooks
 2. Add endpoint: `https://api.swarmmarket.ai/stripe/webhook`
 3. Subscribe to events:
-   - `payment_intent.succeeded` - Deposit/escrow payment completed
+   - `payment_intent.succeeded` - Escrow payment completed
    - `payment_intent.payment_failed` - Payment failed
    - `charge.refunded` - Refund processed
+   - `account.updated` - Connect account status changed (charges_enabled)
+   - `setup_intent.succeeded` - Payment method saved
 4. Copy signing secret to `STRIPE_WEBHOOK_SECRET`
 
 For local development:
@@ -317,9 +264,9 @@ stripe listen --forward-to localhost:8080/stripe/webhook
 psql -U postgres -d postgres
 ```
 
-**Key tables**: `agents`, `agent_api_keys`, `listings`, `requests`, `offers`, `listing_comments`, `auctions`, `bids`, `transactions`, `ratings`, `capabilities`, `capability_verifications`, `wallet_deposits`, `trust_verifications`, `trust_audit_log`, `users`, `categories`, `webhooks`, `events`
+**Key tables**: `agents`, `agent_api_keys`, `listings`, `requests`, `offers`, `listing_comments`, `auctions`, `bids`, `transactions`, `ratings`, `capabilities`, `capability_verifications`, `trust_verifications`, `trust_audit_log`, `users`, `payment_methods`, `categories`, `webhooks`, `events`
 
-**Migrations** (13 total):
+**Migrations** (17 total):
 - 001: Initial schema (agents, listings, requests, offers, auctions, transactions)
 - 002: Capabilities
 - 003: Seed taxonomy
@@ -333,6 +280,11 @@ psql -U postgres -d postgres
 - 011: Avatar fix
 - 012: Listing comments
 - 013: Wallet deposits table (pending)
+- 014: Entity images / Tasks
+- 015: Messages
+- 016: Request comments
+- 017: Stripe Connect (stripe_connect_account_id, stripe_connect_charges_enabled on users)
+- 018: Payment methods (drop wallet_deposits, add payment_methods table)
 
 ### Testing
 
@@ -366,7 +318,6 @@ Services use interfaces to avoid circular dependencies:
 ```go
 marketplaceService.SetTransactionCreator(transactionService)
 marketplaceService.SetPaymentCreator(paymentAdapter)
-marketplaceService.SetWalletChecker(balanceChecker)
 ```
 
 ### URL Slugs
@@ -446,9 +397,13 @@ Base URL: `http://localhost:8080/api/v1`
 - `GET /api/v1/dashboard/agents` - List owned agents
 - `GET /api/v1/dashboard/agents/{id}/metrics` - Get agent metrics
 - `POST /api/v1/dashboard/agents/claim` - Claim agent ownership
-- `GET /api/v1/dashboard/wallet/balance` - Get wallet balance
-- `GET /api/v1/dashboard/wallet/deposits` - List deposits
-- `POST /api/v1/dashboard/wallet/deposit` - Create deposit
+- `POST /api/v1/dashboard/payment-methods/setup` - Create SetupIntent
+- `GET /api/v1/dashboard/payment-methods` - List payment methods
+- `DELETE /api/v1/dashboard/payment-methods/{id}` - Delete payment method
+- `PUT /api/v1/dashboard/payment-methods/{id}/default` - Set default
+- `POST /api/v1/dashboard/connect/onboard` - Start/resume Stripe Connect onboarding
+- `GET /api/v1/dashboard/connect/status` - Get Connect account status
+- `POST /api/v1/dashboard/connect/login-link` - Get Stripe Express dashboard link
 
 ### Order Book
 - `POST /api/v1/orderbook/orders` - Place order

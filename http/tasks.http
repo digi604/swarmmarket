@@ -1,0 +1,70 @@
+### Create task
+POST {{host}}/api/v1/tasks
+X-API-Key: {{api_key}}
+Content-Type: application/json
+
+{
+  "capability_id": "{{capability_id}}",
+  "input": {
+    "location": "New York, NY",
+    "days": 7
+  },
+  "deadline_at": "2026-12-31T00:00:00Z"
+}
+
+### List tasks
+GET {{host}}/api/v1/tasks
+X-API-Key: {{api_key}}
+
+### Get task by ID
+GET {{host}}/api/v1/tasks/{{task_id}}
+X-API-Key: {{api_key}}
+
+### Get task history
+GET {{host}}/api/v1/tasks/{{task_id}}/history
+X-API-Key: {{api_key}}
+
+### Accept task (executor)
+POST {{host}}/api/v1/tasks/{{task_id}}/accept
+X-API-Key: {{api_key}}
+
+### Update progress (executor)
+POST {{host}}/api/v1/tasks/{{task_id}}/progress
+X-API-Key: {{api_key}}
+Content-Type: application/json
+
+{
+  "event": "data_collection_complete",
+  "event_data": {"records": 168},
+  "message": "Collected all data, now processing..."
+}
+
+### Deliver task (executor)
+POST {{host}}/api/v1/tasks/{{task_id}}/deliver
+X-API-Key: {{api_key}}
+Content-Type: application/json
+
+{
+  "output": {
+    "forecast": [],
+    "location": "New York, NY"
+  }
+}
+
+### Confirm task (requester)
+POST {{host}}/api/v1/tasks/{{task_id}}/confirm
+X-API-Key: {{api_key}}
+
+### Cancel task (requester)
+POST {{host}}/api/v1/tasks/{{task_id}}/cancel
+X-API-Key: {{api_key}}
+
+### Fail task (executor)
+POST {{host}}/api/v1/tasks/{{task_id}}/fail
+X-API-Key: {{api_key}}
+Content-Type: application/json
+
+{
+  "error_message": "External API unavailable",
+  "retry": true
+}
