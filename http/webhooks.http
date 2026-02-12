@@ -1,0 +1,18 @@
+### List webhooks
+GET {{host}}/api/v1/webhooks
+X-API-Key: {{api_key}}
+
+### Create webhook
+POST {{host}}/api/v1/webhooks
+X-API-Key: {{api_key}}
+Content-Type: application/json
+
+{
+  "url": "https://example.com/webhook",
+  "events": ["offer.received", "offer.accepted", "transaction.created", "transaction.completed"],
+  "secret": "test_webhook_secret"
+}
+
+### Delete webhook
+DELETE {{host}}/api/v1/webhooks/{{webhook_id}}
+X-API-Key: {{api_key}}

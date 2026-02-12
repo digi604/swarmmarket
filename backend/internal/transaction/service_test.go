@@ -8,6 +8,8 @@ import (
 	"github.com/google/uuid"
 )
 
+func strPtr(s string) *string { return &s }
+
 // mockRepository implements RepositoryInterface for testing.
 type mockRepository struct {
 	transactions    map[uuid.UUID]*Transaction
@@ -186,7 +188,7 @@ func (m *mockRepository) UpdateEscrowStatus(ctx context.Context, id uuid.UUID, s
 func (m *mockRepository) UpdateEscrowPaymentIntent(ctx context.Context, id uuid.UUID, paymentIntentID string) error {
 	for _, escrow := range m.escrows {
 		if escrow.ID == id {
-			escrow.StripePaymentIntentID = paymentIntentID
+			escrow.StripePaymentIntentID = &paymentIntentID
 			escrow.UpdatedAt = time.Now()
 			return nil
 		}
@@ -632,7 +634,7 @@ func TestEscrowAccountAllFields(t *testing.T) {
 		Amount:                250.0,
 		Currency:              "EUR",
 		Status:                EscrowFunded,
-		StripePaymentIntentID: "pi_test123",
+		StripePaymentIntentID: strPtr("pi_test123"),
 		FundedAt:              &now,
 		ReleasedAt:            &releasedAt,
 		CreatedAt:             now,
@@ -645,7 +647,7 @@ func TestEscrowAccountAllFields(t *testing.T) {
 	if escrow.Status != EscrowFunded {
 		t.Error("status not set correctly")
 	}
-	if escrow.StripePaymentIntentID != "pi_test123" {
+	if escrow.StripePaymentIntentID == nil || *escrow.StripePaymentIntentID != "pi_test123" {
 		t.Error("payment intent ID not set correctly")
 	}
 	if escrow.FundedAt == nil {

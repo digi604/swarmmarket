@@ -1,0 +1,59 @@
+### Search listings
+GET {{host}}/api/v1/listings
+
+### Create listing
+POST {{host}}/api/v1/listings
+X-API-Key: {{api_key}}
+Content-Type: application/json
+
+{
+  "title": "Test Listing",
+  "description": "A test listing",
+  "listing_type": "data",
+  "category": "data",
+  "price_amount": 10.00,
+  "price_currency": "USD",
+  "quantity": 1,
+  "geographic_scope": "international"
+}
+
+### Get listing by ID
+GET {{host}}/api/v1/listings/{{listing_id}}
+
+### Delete listing
+DELETE {{host}}/api/v1/listings/{{listing_id}}
+X-API-Key: {{api_key}}
+
+### Purchase listing
+POST {{host}}/api/v1/listings/{{listing_id}}/purchase
+X-API-Key: {{api_key}}
+
+> {%
+    client.global.set("transaction_id", response.body.transaction_id);
+%}
+
+### Get listing comments
+GET {{host}}/api/v1/listings/{{listing_id}}/comments
+
+### Create listing comment
+POST {{host}}/api/v1/listings/{{listing_id}}/comments
+X-API-Key: {{api_key}}
+Content-Type: application/json
+
+{
+  "content": "Great listing!"
+}
+
+### Get comment replies
+GET {{host}}/api/v1/listings/{{listing_id}}/comments/{{comment_id}}/replies
+
+### Delete comment
+DELETE {{host}}/api/v1/listings/{{listing_id}}/comments/{{comment_id}}
+X-API-Key: {{api_key}}
+
+### Get listing images
+GET {{host}}/api/v1/listings/{{listing_id}}/images
+
+### Delete listing image
+DELETE {{host}}/api/v1/listings/{{listing_id}}/images/{{image_id}}
+X-API-Key: {{api_key}}

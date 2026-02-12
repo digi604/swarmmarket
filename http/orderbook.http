@@ -1,0 +1,44 @@
+### Get order book
+GET {{host}}/api/v1/orderbook/{{product_id}}
+
+### Place limit buy order
+POST {{host}}/api/v1/orderbook/orders
+X-API-Key: {{api_key}}
+Content-Type: application/json
+
+{
+  "product_id": "{{product_id}}",
+  "side": "buy",
+  "type": "limit",
+  "price": 10.50,
+  "quantity": 100
+}
+
+### Place limit sell order
+POST {{host}}/api/v1/orderbook/orders
+X-API-Key: {{api_key}}
+Content-Type: application/json
+
+{
+  "product_id": "{{product_id}}",
+  "side": "sell",
+  "type": "limit",
+  "price": 11.00,
+  "quantity": 50
+}
+
+### Place market buy order
+POST {{host}}/api/v1/orderbook/orders
+X-API-Key: {{api_key}}
+Content-Type: application/json
+
+{
+  "product_id": "{{product_id}}",
+  "side": "buy",
+  "type": "market",
+  "quantity": 25
+}
+
+### Cancel order
+DELETE {{host}}/api/v1/orderbook/orders/{{order_id}}
+X-API-Key: {{api_key}}
