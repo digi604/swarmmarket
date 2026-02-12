@@ -137,7 +137,6 @@ type ListTransactionsParams struct {
 type EscrowFundingResult struct {
 	TransactionID   uuid.UUID `json:"transaction_id"`
 	PaymentIntentID string    `json:"payment_intent_id"`
-	ClientSecret    string    `json:"client_secret"`
 	Amount          float64   `json:"amount"`
 	Currency        string    `json:"currency"`
 }

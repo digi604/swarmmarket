@@ -53,7 +53,6 @@ func TestCreatePaymentRequest(t *testing.T) {
 func TestPaymentResult(t *testing.T) {
 	result := &PaymentResult{
 		PaymentIntentID: "pi_test_123",
-		ClientSecret:    "pi_test_123_secret_abc",
 		Status:          "requires_capture",
 		Amount:          50.00,
 		Currency:        "USD",
@@ -219,7 +218,7 @@ func TestAdapterCreateEscrowPayment_NoResolver(t *testing.T) {
 
 	// No resolver set — adapter.resolver is nil
 	// CreateEscrowPayment will fail at Stripe API level (invalid key), but shouldn't panic
-	_, _, err := adapter.CreateEscrowPayment(context.Background(),
+	_, err := adapter.CreateEscrowPayment(context.Background(),
 		uuid.New().String(), uuid.New().String(), uuid.New().String(),
 		10.0, "USD",
 	)
@@ -237,7 +236,7 @@ func TestAdapterCreateEscrowPayment_ResolverReturnsEmpty(t *testing.T) {
 	resolver := &mockResolver{accounts: map[uuid.UUID]string{}}
 	adapter.SetConnectAccountResolver(resolver)
 
-	_, _, err := adapter.CreateEscrowPayment(context.Background(),
+	_, err := adapter.CreateEscrowPayment(context.Background(),
 		uuid.New().String(), uuid.New().String(), sellerID.String(),
 		10.0, "USD",
 	)
@@ -253,7 +252,7 @@ func TestAdapterCreateEscrowPayment_ResolverError(t *testing.T) {
 	resolver := &mockResolver{err: errors.New("db connection failed")}
 	adapter.SetConnectAccountResolver(resolver)
 
-	_, _, err := adapter.CreateEscrowPayment(context.Background(),
+	_, err := adapter.CreateEscrowPayment(context.Background(),
 		uuid.New().String(), uuid.New().String(), uuid.New().String(),
 		10.0, "USD",
 	)
@@ -276,7 +275,7 @@ func TestAdapterCreateEscrowPayment_ResolverReturnsAccount(t *testing.T) {
 	adapter.SetConnectAccountResolver(resolver)
 
 	// Will fail at Stripe API (test key) but should pass the resolver check
-	_, _, err := adapter.CreateEscrowPayment(context.Background(),
+	_, err := adapter.CreateEscrowPayment(context.Background(),
 		uuid.New().String(), uuid.New().String(), sellerID.String(),
 		10.0, "USD",
 	)

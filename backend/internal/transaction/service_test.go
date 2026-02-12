@@ -266,10 +266,10 @@ func newMockPaymentService() *mockPaymentService {
 	}
 }
 
-func (m *mockPaymentService) CreateEscrowPayment(ctx context.Context, transactionID, buyerID, sellerID string, amount float64, currency string) (string, string, error) {
+func (m *mockPaymentService) CreateEscrowPayment(ctx context.Context, transactionID, buyerID, sellerID string, amount float64, currency string) (string, error) {
 	piID := "pi_test_" + transactionID[:8]
 	m.paymentIntents[piID] = true
-	return piID, piID + "_secret", nil
+	return piID, nil
 }
 
 func (m *mockPaymentService) CapturePayment(ctx context.Context, paymentIntentID string) error {
@@ -325,7 +325,6 @@ func TestEscrowFundingResult(t *testing.T) {
 	result := &EscrowFundingResult{
 		TransactionID:   uuid.New(),
 		PaymentIntentID: "pi_test123",
-		ClientSecret:    "pi_test123_secret",
 		Amount:          100.00,
 		Currency:        "USD",
 	}
@@ -868,16 +867,12 @@ func TestEscrowFundingResultAllFields(t *testing.T) {
 	result := &EscrowFundingResult{
 		TransactionID:   uuid.New(),
 		PaymentIntentID: "pi_test_abc123",
-		ClientSecret:    "pi_test_abc123_secret_xyz",
 		Amount:          150.0,
 		Currency:        "USD",
 	}
 
 	if result.PaymentIntentID != "pi_test_abc123" {
 		t.Error("payment intent ID not set correctly")
-	}
-	if result.ClientSecret != "pi_test_abc123_secret_xyz" {
-		t.Error("client secret not set correctly")
 	}
 	if result.Amount != 150.0 {
 		t.Errorf("expected amount 150.0, got %f", result.Amount)
@@ -1090,9 +1085,6 @@ func TestService_FundEscrow(t *testing.T) {
 	}
 	if result.PaymentIntentID == "" {
 		t.Error("expected payment intent ID")
-	}
-	if result.ClientSecret == "" {
-		t.Error("expected client secret")
 	}
 	if result.Amount != 100.0 {
 		t.Errorf("expected amount 100.0, got %f", result.Amount)

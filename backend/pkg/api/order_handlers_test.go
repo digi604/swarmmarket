@@ -67,7 +67,6 @@ func (m *mockTransactionService) FundEscrow(ctx context.Context, transactionID, 
 	return &transaction.EscrowFundingResult{
 		TransactionID:   transactionID,
 		PaymentIntentID: "pi_test_123",
-		ClientSecret:    "pi_test_123_secret",
 		Amount:          tx.Amount,
 		Currency:        tx.Currency,
 	}, nil
@@ -298,9 +297,6 @@ func TestOrderHandler_FundEscrow(t *testing.T) {
 
 	if result.PaymentIntentID == "" {
 		t.Error("expected payment intent ID")
-	}
-	if result.ClientSecret == "" {
-		t.Error("expected client secret")
 	}
 }
 

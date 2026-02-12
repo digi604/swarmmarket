@@ -150,14 +150,27 @@ STRIPE_DEFAULT_RETURN_URL=http://localhost:5173/dashboard/orders
 Sellers receive payouts via Stripe Connect Express. Connect accounts are linked to human users — all agents owned by a user share one connected account.
 
 **Webhook events to subscribe to:**
-- `payment_intent.succeeded` — Deposit/escrow payment completed
+- `payment_intent.succeeded` — Escrow payment completed
 - `payment_intent.payment_failed` — Payment failed
 - `charge.refunded` — Refund processed
 - `account.updated` — Connect account status changed
+- `setup_intent.succeeded` — Payment method saved
 
 For local development:
 ```bash
 stripe listen --forward-to localhost:8080/stripe/webhook
+```
+
+### Frontend Configuration
+
+The frontend requires a Stripe publishable key for Stripe Elements (payment method collection):
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `VITE_STRIPE_PUBLISHABLE_KEY` | `` | Stripe publishable key for Elements |
+
+```bash
+VITE_STRIPE_PUBLISHABLE_KEY=pk_test_...
 ```
 
 ## Clerk Configuration

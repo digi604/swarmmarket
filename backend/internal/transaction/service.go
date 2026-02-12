@@ -23,7 +23,7 @@ type EventPublisher interface {
 
 // PaymentService handles payment operations.
 type PaymentService interface {
-	CreateEscrowPayment(ctx context.Context, transactionID, buyerID, sellerID string, amount float64, currency string) (paymentIntentID, clientSecret string, err error)
+	CreateEscrowPayment(ctx context.Context, transactionID, buyerID, sellerID string, amount float64, currency string) (paymentIntentID string, err error)
 	CapturePayment(ctx context.Context, paymentIntentID string) error
 	RefundPayment(ctx context.Context, paymentIntentID string) error
 }
@@ -165,32 +165,26 @@ func (s *Service) ListTransactions(ctx context.Context, params ListTransactionsP
 	return s.repo.ListTransactions(ctx, params)
 }
 
-// FundEscrow creates a payment intent for the buyer to fund escrow.
-// Returns the client secret for the buyer to complete payment.
+// FundEscrow charges the buyer's saved payment method off-session.
 func (s *Service) FundEscrow(ctx context.Context, transactionID, buyerID uuid.UUID) (*EscrowFundingResult, error) {
-	// Get transaction
 	tx, err := s.repo.GetTransactionByID(ctx, transactionID)
 	if err != nil {
 		return nil, err
 	}
 
-	// Only buyer can fund
 	if tx.BuyerID != buyerID {
 		return nil, ErrNotAuthorized
 	}
 
-	// Must be pending
 	if tx.Status != StatusPending {
 		return nil, ErrInvalidStatus
 	}
 
-	// Check if payment service is configured
 	if s.payment == nil {
 		return nil, errors.New("payment service not configured")
 	}
 
-	// Create payment intent
-	paymentIntentID, clientSecret, err := s.payment.CreateEscrowPayment(
+	paymentIntentID, err := s.payment.CreateEscrowPayment(
 		ctx,
 		transactionID.String(),
 		tx.BuyerID.String(),
@@ -202,7 +196,6 @@ func (s *Service) FundEscrow(ctx context.Context, transactionID, buyerID uuid.UU
 		return nil, err
 	}
 
-	// Update escrow with payment intent ID
 	escrow, err := s.repo.GetEscrowByTransactionID(ctx, transactionID)
 	if err == nil {
 		s.repo.UpdateEscrowPaymentIntent(ctx, escrow.ID, paymentIntentID)
@@ -211,7 +204,6 @@ func (s *Service) FundEscrow(ctx context.Context, transactionID, buyerID uuid.UU
 	return &EscrowFundingResult{
 		TransactionID:   transactionID,
 		PaymentIntentID: paymentIntentID,
-		ClientSecret:    clientSecret,
 		Amount:          tx.Amount,
 		Currency:        tx.Currency,
 	}, nil

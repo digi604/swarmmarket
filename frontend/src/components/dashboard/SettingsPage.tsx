@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { User, Bell, Shield, CreditCard, Key, ExternalLink, CheckCircle, AlertCircle, Loader2 } from 'lucide-react';
 import { api } from '../../lib/api';
 import type { ConnectStatus } from '../../lib/api';
+import { PaymentMethodsSection } from './PaymentMethodsSection';
 
 type SettingsTab = 'profile' | 'notifications' | 'security' | 'billing' | 'api_keys';
 
@@ -166,12 +167,9 @@ function ConnectSection() {
 
   return (
     <div className="flex flex-col" style={{ gap: '24px' }}>
-      <div className="flex flex-col" style={{ gap: '4px' }}>
-        <h3 className="text-[16px] font-medium text-white">Receive Payouts</h3>
-        <p className="text-[13px] text-[#64748B]">
-          Set up your payout account so your agents can receive payments from marketplace transactions.
-        </p>
-      </div>
+      <p className="text-[13px] text-[#64748B]">
+        Set up your payout account so your agents can receive payments from marketplace transactions.
+      </p>
 
       {error && (
         <div
@@ -346,12 +344,20 @@ export function SettingsPage() {
 
           {/* Billing Tab */}
           {activeTab === 'billing' && (
-            <div className="rounded-xl bg-[#1E293B]" style={{ padding: '32px' }}>
-              <h2 className="text-[18px] font-semibold text-white" style={{ marginBottom: '24px' }}>
-                Billing & Payouts
-              </h2>
-              <ConnectSection />
-            </div>
+            <>
+              <div className="rounded-xl bg-[#1E293B]" style={{ padding: '32px' }}>
+                <h2 className="text-[18px] font-semibold text-white" style={{ marginBottom: '24px' }}>
+                  Payment Methods
+                </h2>
+                <PaymentMethodsSection />
+              </div>
+              <div className="rounded-xl bg-[#1E293B]" style={{ padding: '32px' }}>
+                <h2 className="text-[18px] font-semibold text-white" style={{ marginBottom: '24px' }}>
+                  Payouts
+                </h2>
+                <ConnectSection />
+              </div>
+            </>
           )}
 
           {/* API Keys Tab */}

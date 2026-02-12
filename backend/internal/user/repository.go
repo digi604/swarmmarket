@@ -26,6 +26,7 @@ func NewRepository(pool *pgxpool.Pool) *Repository {
 
 const userColumns = `id, clerk_user_id, email, name, avatar_url,
 	COALESCE(stripe_connect_account_id, ''), COALESCE(stripe_connect_charges_enabled, false),
+	COALESCE(stripe_customer_id, ''), COALESCE(stripe_default_payment_method_id, ''),
 	created_at, updated_at`
 
 func scanUser(row pgx.Row) (*User, error) {
@@ -38,6 +39,8 @@ func scanUser(row pgx.Row) (*User, error) {
 		&u.AvatarURL,
 		&u.StripeConnectAccountID,
 		&u.StripeConnectChargesEnabled,
+		&u.StripeCustomerID,
+		&u.StripeDefaultPaymentMethodID,
 		&u.CreatedAt,
 		&u.UpdatedAt,
 	)
@@ -205,6 +208,55 @@ func (r *Repository) GetConnectAccountIDForAgent(ctx context.Context, agentID uu
 		return "", nil
 	}
 	return *accountID, nil
+}
+
+// SetStripeCustomerID stores the Stripe Customer ID for a user.
+func (r *Repository) SetStripeCustomerID(ctx context.Context, userID uuid.UUID, customerID string) error {
+	result, err := r.pool.Exec(ctx,
+		`UPDATE users SET stripe_customer_id = $2, updated_at = NOW() WHERE id = $1`,
+		userID, customerID,
+	)
+	if err != nil {
+		return fmt.Errorf("failed to set stripe customer id: %w", err)
+	}
+	if result.RowsAffected() == 0 {
+		return ErrUserNotFound
+	}
+	return nil
+}
+
+// SetStripeDefaultPaymentMethod updates the default payment method for a Stripe customer.
+func (r *Repository) SetStripeDefaultPaymentMethod(ctx context.Context, customerID, paymentMethodID string) error {
+	result, err := r.pool.Exec(ctx,
+		`UPDATE users SET stripe_default_payment_method_id = $2, updated_at = NOW() WHERE stripe_customer_id = $1`,
+		customerID, paymentMethodID,
+	)
+	if err != nil {
+		return fmt.Errorf("failed to set default payment method: %w", err)
+	}
+	if result.RowsAffected() == 0 {
+		return ErrUserNotFound
+	}
+	return nil
+}
+
+// GetPaymentMethodForAgent resolves agent → owner → stripe customer + payment method.
+func (r *Repository) GetPaymentMethodForAgent(ctx context.Context, agentID uuid.UUID) (customerID, pmID string, ownerUserID uuid.UUID, err error) {
+	err = r.pool.QueryRow(ctx, `
+		SELECT u.stripe_customer_id, u.stripe_default_payment_method_id, u.id
+		FROM agents a
+		JOIN users u ON u.id = a.owner_user_id
+		WHERE a.id = $1
+		  AND u.stripe_customer_id IS NOT NULL
+		  AND u.stripe_default_payment_method_id IS NOT NULL
+	`, agentID).Scan(&customerID, &pmID, &ownerUserID)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return "", "", uuid.Nil, nil
+		}
+		return "", "", uuid.Nil, fmt.Errorf("failed to resolve payment method for agent: %w", err)
+	}
+	return customerID, pmID, ownerUserID, nil
 }
 
 // GetOwnedAgents retrieves all agents owned by a user.

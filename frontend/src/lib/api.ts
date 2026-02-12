@@ -282,7 +282,7 @@ export interface AuctionSearchParams {
 
 export interface PurchaseResult {
   transaction_id: string;
-  client_secret: string;
+  payment_intent_id: string;
   amount: number;
   currency: string;
   status: string;
@@ -467,30 +467,39 @@ class ApiClient {
     return this.request<{ categories: Category[] }>('/api/v1/categories', {}, false);
   }
 
-  // Wallet endpoints
-  async getWalletBalance(): Promise<WalletBalance> {
-    return this.request<WalletBalance>('/api/v1/dashboard/wallet/balance');
-  }
-
-  async getWalletDeposits(params?: { limit?: number; offset?: number }): Promise<{ deposits: Deposit[]; total: number }> {
-    const searchParams = new URLSearchParams();
-    if (params?.limit) searchParams.set('limit', params.limit.toString());
-    if (params?.offset) searchParams.set('offset', params.offset.toString());
-
-    const query = searchParams.toString();
-    return this.request<{ deposits: Deposit[]; total: number }>(
-      `/api/v1/dashboard/wallet/deposits${query ? `?${query}` : ''}`
-    );
-  }
-
-  async createDeposit(amount: number, currency?: string, returnUrl?: string): Promise<CreateDepositResponse> {
-    return this.request<CreateDepositResponse>('/api/v1/dashboard/wallet/deposit', {
+  // Payment method endpoints
+  async createSetupIntent(): Promise<SetupIntentResponse> {
+    return this.request<SetupIntentResponse>('/api/v1/dashboard/payment-methods/setup', {
       method: 'POST',
-      body: JSON.stringify({
-        amount,
-        currency: currency || 'USD',
-        return_url: returnUrl || window.location.href,
-      }),
+    });
+  }
+
+  async listPaymentMethods(): Promise<PaymentMethodInfo[]> {
+    const data = await this.request<{ payment_methods: PaymentMethodInfo[] }>('/api/v1/dashboard/payment-methods');
+    return data.payment_methods;
+  }
+
+  async deletePaymentMethod(id: string): Promise<void> {
+    return this.request<void>(`/api/v1/dashboard/payment-methods/${id}`, {
+      method: 'DELETE',
+    });
+  }
+
+  async setDefaultPaymentMethod(id: string): Promise<void> {
+    return this.request<void>(`/api/v1/dashboard/payment-methods/${id}/default`, {
+      method: 'PUT',
+    });
+  }
+
+  // Spending limit endpoints
+  async getSpendingLimits(agentId: string): Promise<SpendingLimits> {
+    return this.request<SpendingLimits>(`/api/v1/dashboard/agents/${agentId}/spending-limits`);
+  }
+
+  async setSpendingLimits(agentId: string, limits: Partial<SpendingLimits>): Promise<SpendingLimits> {
+    return this.request<SpendingLimits>(`/api/v1/dashboard/agents/${agentId}/spending-limits`, {
+      method: 'PUT',
+      body: JSON.stringify(limits),
     });
   }
 
@@ -694,33 +703,27 @@ class ApiClient {
   }
 }
 
-// Wallet types
-export interface WalletBalance {
-  available: number;
-  pending: number;
-  currency: string;
-}
-
-export interface Deposit {
+// Payment method types
+export interface PaymentMethodInfo {
   id: string;
-  user_id?: string;
-  agent_id?: string;
-  amount: number;
-  currency: string;
-  status: 'pending' | 'processing' | 'completed' | 'failed' | 'cancelled';
-  failure_reason?: string;
-  created_at: string;
-  updated_at: string;
-  completed_at?: string;
+  brand: string;
+  last4: string;
+  exp_month: number;
+  exp_year: number;
+  is_default: boolean;
 }
 
-export interface CreateDepositResponse {
-  deposit_id: string;
+export interface SetupIntentResponse {
   client_secret: string;
-  checkout_url: string;
-  amount: number;
-  currency: string;
-  instructions: string;
+  customer_id: string;
+}
+
+export interface SpendingLimits {
+  agent_id: string;
+  max_per_transaction?: number;
+  daily_limit?: number;
+  monthly_limit?: number;
+  is_enabled: boolean;
 }
 
 // Image types

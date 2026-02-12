@@ -15,12 +15,12 @@ import (
 	"github.com/digi604/swarmmarket/backend/internal/messaging"
 	"github.com/digi604/swarmmarket/backend/internal/notification"
 	"github.com/digi604/swarmmarket/backend/internal/payment"
+	"github.com/digi604/swarmmarket/backend/internal/spending"
 	"github.com/digi604/swarmmarket/backend/internal/storage"
 	"github.com/digi604/swarmmarket/backend/internal/task"
 	"github.com/digi604/swarmmarket/backend/internal/transaction"
 	"github.com/digi604/swarmmarket/backend/internal/trust"
 	"github.com/digi604/swarmmarket/backend/internal/user"
-	"github.com/digi604/swarmmarket/backend/internal/wallet"
 	"github.com/digi604/swarmmarket/backend/pkg/middleware"
 	"github.com/digi604/swarmmarket/backend/pkg/websocket"
 	"github.com/go-chi/chi/v5"
@@ -56,7 +56,7 @@ type RouterConfig struct {
 	MatchingEngine      *matching.Engine
 	PaymentService      *payment.Service
 	TrustService        *trust.Service
-	WalletService       *wallet.Service
+	SpendingService     *spending.Service
 	TaskService         *task.Service
 	MessagingService    *messaging.Service
 	WebhookRepo         *notification.Repository
@@ -117,7 +117,7 @@ func NewRouter(cfg RouterConfig) *chi.Mux {
 	orderBookHandler := NewOrderBookHandler(cfg.MatchingEngine)
 	var paymentHandler *PaymentHandler
 	if cfg.PaymentService != nil {
-		paymentHandler = NewPaymentHandler(cfg.PaymentService, cfg.TransactionService, cfg.WalletService, cfg.Config.Stripe.WebhookSecret)
+		paymentHandler = NewPaymentHandler(cfg.PaymentService, cfg.TransactionService, cfg.Config.Stripe.WebhookSecret)
 		if cfg.UserRepo != nil {
 			paymentHandler.SetUserRepo(cfg.UserRepo)
 		}
@@ -232,17 +232,27 @@ func NewRouter(cfg RouterConfig) *chi.Mux {
 				r.Use(clerkMiddleware)
 				r.Get("/profile", dashboardHandler.GetProfile)
 				r.Get("/agents", dashboardHandler.ListOwnedAgents)
-				r.Get("/agents/{id}/metrics", dashboardHandler.GetAgentMetrics)
-				r.Get("/agents/{id}/activity", dashboardHandler.GetAgentActivity)
+				r.Route("/agents/{id}", func(r chi.Router) {
+					r.Get("/metrics", dashboardHandler.GetAgentMetrics)
+					r.Get("/activity", dashboardHandler.GetAgentActivity)
+
+					// Spending limits
+					if cfg.SpendingService != nil {
+						slHandler := NewSpendingLimitHandler(cfg.SpendingService)
+						r.Get("/spending-limits", slHandler.GetSpendingLimits)
+						r.Put("/spending-limits", slHandler.SetSpendingLimits)
+					}
+				})
 				r.Post("/agents/claim", dashboardHandler.ClaimAgentOwnership)
 
-				// Wallet routes
-				if cfg.WalletService != nil {
-					walletHandler := NewWalletHandler(cfg.WalletService)
-					r.Route("/wallet", func(r chi.Router) {
-						r.Get("/balance", walletHandler.GetBalance)
-						r.Get("/deposits", walletHandler.GetDeposits)
-						r.Post("/deposit", walletHandler.CreateDeposit)
+				// Payment methods
+				if cfg.PaymentService != nil && cfg.UserRepo != nil {
+					pmHandler := NewPaymentMethodHandler(cfg.PaymentService, cfg.UserRepo)
+					r.Route("/payment-methods", func(r chi.Router) {
+						r.Post("/setup", pmHandler.CreateSetupIntent)
+						r.Get("/", pmHandler.ListPaymentMethods)
+						r.Delete("/{id}", pmHandler.DeletePaymentMethod)
+						r.Put("/{id}/default", pmHandler.SetDefault)
 					})
 				}
 
@@ -374,17 +384,6 @@ func NewRouter(cfg RouterConfig) *chi.Mux {
 			r.Route("/payments", func(r chi.Router) {
 				r.With(authMiddleware).Post("/intent", paymentHandler.CreatePaymentIntent)
 				r.With(authMiddleware).Get("/{paymentIntentId}", paymentHandler.GetPaymentStatus)
-			})
-		}
-
-		// Agent wallet routes
-		if cfg.WalletService != nil {
-			agentWalletHandler := NewAgentWalletHandler(cfg.WalletService)
-			r.Route("/wallet", func(r chi.Router) {
-				r.Use(authMiddleware)
-				r.Get("/balance", agentWalletHandler.GetBalance)
-				r.Get("/deposits", agentWalletHandler.GetDeposits)
-				r.Post("/deposit", agentWalletHandler.CreateDeposit)
 			})
 		}
 
@@ -612,7 +611,8 @@ func rootHandler(w http.ResponseWriter, r *http.Request) {
       ├── GET  /profile          User profile
       ├── GET  /agents           Owned agents
       ├── POST /agents/claim     Claim agent
-      └── /wallet/*              Wallet & deposits
+      ├── /payment-methods/*     Payment methods
+      └── /agents/{id}/spending-limits  Spending limits
 
   Docs: https://github.com/digi604/swarmmarket
 
