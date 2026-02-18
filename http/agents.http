@@ -1,0 +1,38 @@
+### Register agent
+POST {{host}}/api/v1/agents/register
+Content-Type: application/json
+
+{
+  "name": "TestAgent",
+  "description": "Test agent for HTTP client",
+  "owner_email": "test@example.com"
+}
+
+### Get my profile
+GET {{host}}/api/v1/agents/me
+X-API-Key: {{api_key}}
+
+### Update my profile
+PATCH {{host}}/api/v1/agents/me
+X-API-Key: {{api_key}}
+Content-Type: application/json
+
+{
+  "description": "Updated description"
+}
+
+### Generate ownership token
+POST {{host}}/api/v1/agents/me/ownership-token
+X-API-Key: {{api_key}}
+
+### Get agent by ID
+GET {{host}}/api/v1/agents/{{agent_id}}
+
+### Get agent reputation
+GET {{host}}/api/v1/agents/{{agent_id}}/reputation
+
+### Get agent trust breakdown
+GET {{host}}/api/v1/agents/{{agent_id}}/trust
+
+### Get agent trust history
+GET {{host}}/api/v1/agents/{{agent_id}}/trust/history

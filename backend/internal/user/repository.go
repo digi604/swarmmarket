@@ -24,90 +24,74 @@ func NewRepository(pool *pgxpool.Pool) *Repository {
 	return &Repository{pool: pool}
 }
 
+const userColumns = `id, clerk_user_id, email, name, avatar_url,
+	COALESCE(stripe_connect_account_id, ''), COALESCE(stripe_connect_charges_enabled, false),
+	COALESCE(stripe_customer_id, ''), COALESCE(stripe_default_payment_method_id, ''),
+	created_at, updated_at`
+
+func scanUser(row pgx.Row) (*User, error) {
+	var u User
+	err := row.Scan(
+		&u.ID,
+		&u.ClerkUserID,
+		&u.Email,
+		&u.Name,
+		&u.AvatarURL,
+		&u.StripeConnectAccountID,
+		&u.StripeConnectChargesEnabled,
+		&u.StripeCustomerID,
+		&u.StripeDefaultPaymentMethodID,
+		&u.CreatedAt,
+		&u.UpdatedAt,
+	)
+	return &u, err
+}
+
 // CreateUser creates a new user in the database.
 func (r *Repository) CreateUser(ctx context.Context, user *User) (*User, error) {
 	query := `
 		INSERT INTO users (clerk_user_id, email, name, avatar_url)
 		VALUES ($1, $2, $3, $4)
-		RETURNING id, clerk_user_id, email, name, avatar_url, created_at, updated_at
-	`
+		RETURNING ` + userColumns
 
-	var u User
-	err := r.pool.QueryRow(ctx, query,
+	u, err := scanUser(r.pool.QueryRow(ctx, query,
 		user.ClerkUserID,
 		user.Email,
 		user.Name,
 		user.AvatarURL,
-	).Scan(
-		&u.ID,
-		&u.ClerkUserID,
-		&u.Email,
-		&u.Name,
-		&u.AvatarURL,
-		&u.CreatedAt,
-		&u.UpdatedAt,
-	)
+	))
 	if err != nil {
 		return nil, fmt.Errorf("failed to create user: %w", err)
 	}
-
-	return &u, nil
+	return u, nil
 }
 
 // GetUserByID retrieves a user by their internal ID.
 func (r *Repository) GetUserByID(ctx context.Context, id uuid.UUID) (*User, error) {
-	query := `
-		SELECT id, clerk_user_id, email, name, avatar_url, created_at, updated_at
-		FROM users
-		WHERE id = $1
-	`
+	query := `SELECT ` + userColumns + ` FROM users WHERE id = $1`
 
-	var u User
-	err := r.pool.QueryRow(ctx, query, id).Scan(
-		&u.ID,
-		&u.ClerkUserID,
-		&u.Email,
-		&u.Name,
-		&u.AvatarURL,
-		&u.CreatedAt,
-		&u.UpdatedAt,
-	)
+	u, err := scanUser(r.pool.QueryRow(ctx, query, id))
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return nil, ErrUserNotFound
 		}
 		return nil, fmt.Errorf("failed to get user: %w", err)
 	}
-
-	return &u, nil
+	return u, nil
 }
 
 // GetUserByClerkID retrieves a user by their Clerk user ID.
 func (r *Repository) GetUserByClerkID(ctx context.Context, clerkUserID string) (*User, error) {
-	query := `
-		SELECT id, clerk_user_id, email, name, avatar_url, created_at, updated_at
-		FROM users
-		WHERE clerk_user_id = $1
-	`
+	query := `SELECT ` + userColumns + ` FROM users WHERE clerk_user_id = $1`
 
-	var u User
-	err := r.pool.QueryRow(ctx, query, clerkUserID).Scan(
-		&u.ID,
-		&u.ClerkUserID,
-		&u.Email,
-		&u.Name,
-		&u.AvatarURL,
-		&u.CreatedAt,
-		&u.UpdatedAt,
-	)
+	u, err := scanUser(r.pool.QueryRow(ctx, query, clerkUserID))
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return nil, ErrUserNotFound
 		}
 		return nil, fmt.Errorf("failed to get user by clerk id: %w", err)
 	}
-
-	return &u, nil
+	return u, nil
 }
 
 // UpdateUser updates a user's profile information.
@@ -145,29 +129,134 @@ func (r *Repository) UpsertUser(ctx context.Context, user *User) (*User, error) 
 		    name = EXCLUDED.name,
 		    avatar_url = EXCLUDED.avatar_url,
 		    updated_at = NOW()
-		RETURNING id, clerk_user_id, email, name, avatar_url, created_at, updated_at
-	`
+		RETURNING ` + userColumns
 
-	var u User
-	err := r.pool.QueryRow(ctx, query,
+	u, err := scanUser(r.pool.QueryRow(ctx, query,
 		user.ClerkUserID,
 		user.Email,
 		user.Name,
 		user.AvatarURL,
-	).Scan(
-		&u.ID,
-		&u.ClerkUserID,
-		&u.Email,
-		&u.Name,
-		&u.AvatarURL,
-		&u.CreatedAt,
-		&u.UpdatedAt,
-	)
+	))
 	if err != nil {
 		return nil, fmt.Errorf("failed to upsert user: %w", err)
 	}
+	return u, nil
+}
 
-	return &u, nil
+// SetStripeConnectAccountID stores the Stripe Connect account ID for a user.
+func (r *Repository) SetStripeConnectAccountID(ctx context.Context, userID uuid.UUID, accountID string) error {
+	result, err := r.pool.Exec(ctx,
+		`UPDATE users SET stripe_connect_account_id = $2, updated_at = NOW() WHERE id = $1`,
+		userID, accountID,
+	)
+	if err != nil {
+		return fmt.Errorf("failed to set stripe connect account id: %w", err)
+	}
+	if result.RowsAffected() == 0 {
+		return ErrUserNotFound
+	}
+	return nil
+}
+
+// SetStripeConnectChargesEnabled updates the cached charges_enabled flag.
+func (r *Repository) SetStripeConnectChargesEnabled(ctx context.Context, userID uuid.UUID, enabled bool) error {
+	result, err := r.pool.Exec(ctx,
+		`UPDATE users SET stripe_connect_charges_enabled = $2, updated_at = NOW() WHERE id = $1`,
+		userID, enabled,
+	)
+	if err != nil {
+		return fmt.Errorf("failed to set stripe connect charges enabled: %w", err)
+	}
+	if result.RowsAffected() == 0 {
+		return ErrUserNotFound
+	}
+	return nil
+}
+
+// GetUserByStripeConnectAccountID looks up a user by their Connect account ID (for webhooks).
+func (r *Repository) GetUserByStripeConnectAccountID(ctx context.Context, accountID string) (*User, error) {
+	query := `SELECT ` + userColumns + ` FROM users WHERE stripe_connect_account_id = $1`
+
+	u, err := scanUser(r.pool.QueryRow(ctx, query, accountID))
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, ErrUserNotFound
+		}
+		return nil, fmt.Errorf("failed to get user by stripe connect account id: %w", err)
+	}
+	return u, nil
+}
+
+// GetConnectAccountIDForAgent resolves agent → owner → stripe_connect_account_id.
+// Returns empty string if agent has no owner or owner has no Connect account.
+func (r *Repository) GetConnectAccountIDForAgent(ctx context.Context, agentID uuid.UUID) (string, error) {
+	var accountID *string
+	err := r.pool.QueryRow(ctx, `
+		SELECT u.stripe_connect_account_id
+		FROM agents a
+		JOIN users u ON u.id = a.owner_user_id
+		WHERE a.id = $1
+		  AND u.stripe_connect_charges_enabled = true
+	`, agentID).Scan(&accountID)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return "", nil
+		}
+		return "", fmt.Errorf("failed to resolve connect account for agent: %w", err)
+	}
+	if accountID == nil {
+		return "", nil
+	}
+	return *accountID, nil
+}
+
+// SetStripeCustomerID stores the Stripe Customer ID for a user.
+func (r *Repository) SetStripeCustomerID(ctx context.Context, userID uuid.UUID, customerID string) error {
+	result, err := r.pool.Exec(ctx,
+		`UPDATE users SET stripe_customer_id = $2, updated_at = NOW() WHERE id = $1`,
+		userID, customerID,
+	)
+	if err != nil {
+		return fmt.Errorf("failed to set stripe customer id: %w", err)
+	}
+	if result.RowsAffected() == 0 {
+		return ErrUserNotFound
+	}
+	return nil
+}
+
+// SetStripeDefaultPaymentMethod updates the default payment method for a Stripe customer.
+func (r *Repository) SetStripeDefaultPaymentMethod(ctx context.Context, customerID, paymentMethodID string) error {
+	result, err := r.pool.Exec(ctx,
+		`UPDATE users SET stripe_default_payment_method_id = $2, updated_at = NOW() WHERE stripe_customer_id = $1`,
+		customerID, paymentMethodID,
+	)
+	if err != nil {
+		return fmt.Errorf("failed to set default payment method: %w", err)
+	}
+	if result.RowsAffected() == 0 {
+		return ErrUserNotFound
+	}
+	return nil
+}
+
+// GetPaymentMethodForAgent resolves agent → owner → stripe customer + payment method.
+func (r *Repository) GetPaymentMethodForAgent(ctx context.Context, agentID uuid.UUID) (customerID, pmID string, ownerUserID uuid.UUID, err error) {
+	err = r.pool.QueryRow(ctx, `
+		SELECT u.stripe_customer_id, u.stripe_default_payment_method_id, u.id
+		FROM agents a
+		JOIN users u ON u.id = a.owner_user_id
+		WHERE a.id = $1
+		  AND u.stripe_customer_id IS NOT NULL
+		  AND u.stripe_default_payment_method_id IS NOT NULL
+	`, agentID).Scan(&customerID, &pmID, &ownerUserID)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return "", "", uuid.Nil, nil
+		}
+		return "", "", uuid.Nil, fmt.Errorf("failed to resolve payment method for agent: %w", err)
+	}
+	return customerID, pmID, ownerUserID, nil
 }
 
 // GetOwnedAgents retrieves all agents owned by a user.

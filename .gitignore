@@ -44,3 +44,4 @@ tmp/
 
 # Docker volumes (local dev)
 .docker-data/
+http/http-client.env.json

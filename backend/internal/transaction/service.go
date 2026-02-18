@@ -23,7 +23,7 @@ type EventPublisher interface {
 
 // PaymentService handles payment operations.
 type PaymentService interface {
-	CreateEscrowPayment(ctx context.Context, transactionID, buyerID, sellerID string, amount float64, currency string) (paymentIntentID, clientSecret string, err error)
+	CreateEscrowPayment(ctx context.Context, transactionID, buyerID, sellerID string, amount float64, currency string) (paymentIntentID string, err error)
 	CapturePayment(ctx context.Context, paymentIntentID string) error
 	RefundPayment(ctx context.Context, paymentIntentID string) error
 }
@@ -165,32 +165,26 @@ func (s *Service) ListTransactions(ctx context.Context, params ListTransactionsP
 	return s.repo.ListTransactions(ctx, params)
 }
 
-// FundEscrow creates a payment intent for the buyer to fund escrow.
-// Returns the client secret for the buyer to complete payment.
+// FundEscrow charges the buyer's saved payment method off-session.
 func (s *Service) FundEscrow(ctx context.Context, transactionID, buyerID uuid.UUID) (*EscrowFundingResult, error) {
-	// Get transaction
 	tx, err := s.repo.GetTransactionByID(ctx, transactionID)
 	if err != nil {
 		return nil, err
 	}
 
-	// Only buyer can fund
 	if tx.BuyerID != buyerID {
 		return nil, ErrNotAuthorized
 	}
 
-	// Must be pending
 	if tx.Status != StatusPending {
 		return nil, ErrInvalidStatus
 	}
 
-	// Check if payment service is configured
 	if s.payment == nil {
 		return nil, errors.New("payment service not configured")
 	}
 
-	// Create payment intent
-	paymentIntentID, clientSecret, err := s.payment.CreateEscrowPayment(
+	paymentIntentID, err := s.payment.CreateEscrowPayment(
 		ctx,
 		transactionID.String(),
 		tx.BuyerID.String(),
@@ -202,16 +196,25 @@ func (s *Service) FundEscrow(ctx context.Context, transactionID, buyerID uuid.UU
 		return nil, err
 	}
 
-	// Update escrow with payment intent ID
 	escrow, err := s.repo.GetEscrowByTransactionID(ctx, transactionID)
-	if err == nil {
-		s.repo.UpdateEscrowPaymentIntent(ctx, escrow.ID, paymentIntentID)
+	if err != nil {
+		logger.Error("escrow_lookup_failed", map[string]interface{}{
+			"transaction_id": transactionID.String(),
+			"error":          err.Error(),
+		})
+	} else {
+		if err := s.repo.UpdateEscrowPaymentIntent(ctx, escrow.ID, paymentIntentID); err != nil {
+			logger.Error("escrow_update_failed", map[string]interface{}{
+				"escrow_id":         escrow.ID.String(),
+				"payment_intent_id": paymentIntentID,
+				"error":             err.Error(),
+			})
+		}
 	}
 
 	return &EscrowFundingResult{
 		TransactionID:   transactionID,
 		PaymentIntentID: paymentIntentID,
-		ClientSecret:    clientSecret,
 		Amount:          tx.Amount,
 		Currency:        tx.Currency,
 	}, nil
@@ -332,6 +335,19 @@ func (s *Service) ConfirmDelivery(ctx context.Context, transactionID, agentID uu
 		return nil, ErrInvalidStatus
 	}
 
+	// Capture escrow payment before completing
+	escrow, err := s.repo.GetEscrowByTransactionID(ctx, transactionID)
+	if err == nil && escrow.StripePaymentIntentID != nil && *escrow.StripePaymentIntentID != "" && s.payment != nil {
+		if err := s.payment.CapturePayment(ctx, *escrow.StripePaymentIntentID); err != nil {
+			s.publishEvent(ctx, "payment.capture_failed", map[string]any{
+				"transaction_id":    transactionID,
+				"payment_intent_id": *escrow.StripePaymentIntentID,
+				"error":             err.Error(),
+			})
+		}
+		s.repo.UpdateEscrowStatus(ctx, escrow.ID, EscrowReleased)
+	}
+
 	// Update transaction
 	if err := s.repo.ConfirmDelivery(ctx, transactionID); err != nil {
 		return nil, err
@@ -379,13 +395,11 @@ func (s *Service) CompleteTransaction(ctx context.Context, transactionID uuid.UU
 
 	// Get escrow and capture payment if we have a payment intent
 	escrow, err := s.repo.GetEscrowByTransactionID(ctx, transactionID)
-	if err == nil && escrow.StripePaymentIntentID != "" && s.payment != nil {
-		// Capture the held payment (releases funds to seller)
-		if err := s.payment.CapturePayment(ctx, escrow.StripePaymentIntentID); err != nil {
-			// Log error but don't fail - manual resolution needed
+	if err == nil && escrow.StripePaymentIntentID != nil && *escrow.StripePaymentIntentID != "" && s.payment != nil {
+		if err := s.payment.CapturePayment(ctx, *escrow.StripePaymentIntentID); err != nil {
 			s.publishEvent(ctx, "payment.capture_failed", map[string]any{
 				"transaction_id":    transactionID,
-				"payment_intent_id": escrow.StripePaymentIntentID,
+				"payment_intent_id": *escrow.StripePaymentIntentID,
 				"error":             err.Error(),
 			})
 		}

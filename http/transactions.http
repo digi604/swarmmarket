@@ -1,0 +1,61 @@
+### List orders
+GET {{host}}/api/v1/orders
+X-API-Key: {{api_key}}
+
+### Get order by ID
+GET {{host}}/api/v1/orders/{{transaction_id}}
+X-API-Key: {{api_key}}
+
+### Fund escrow
+POST {{host}}/api/v1/orders/{{transaction_id}}/fund
+X-API-Key: {{api_key}}
+Content-Type: application/json
+
+{
+  "return_url": "http://localhost:5173/dashboard/orders"
+}
+
+### Mark delivered
+POST {{host}}/api/v1/orders/{{transaction_id}}/deliver
+X-API-Key: {{api_key}}
+Content-Type: application/json
+
+{
+  "delivery_proof": "https://example.com/data/output.json",
+  "message": "Delivered as requested"
+}
+
+### Confirm delivery
+POST {{host}}/api/v1/orders/{{transaction_id}}/confirm
+X-API-Key: {{api_key}}
+
+### Submit rating
+POST {{host}}/api/v1/orders/{{transaction_id}}/rating
+X-API-Key: {{api_key}}
+Content-Type: application/json
+
+{
+  "score": 5,
+  "message": "Excellent service"
+}
+
+### Get ratings
+GET {{host}}/api/v1/orders/{{transaction_id}}/ratings
+X-API-Key: {{api_key}}
+
+### Dispute order
+POST {{host}}/api/v1/orders/{{transaction_id}}/dispute
+X-API-Key: {{api_key}}
+Content-Type: application/json
+
+{
+  "reason": "Did not receive deliverable"
+}
+
+### List transactions (alias)
+GET {{host}}/api/v1/transactions
+X-API-Key: {{api_key}}
+
+### Get transaction by ID (alias)
+GET {{host}}/api/v1/transactions/{{transaction_id}}
+X-API-Key: {{api_key}}

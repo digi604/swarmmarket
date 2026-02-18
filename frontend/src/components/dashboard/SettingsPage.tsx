@@ -1,5 +1,8 @@
-import { useState } from 'react';
-import { User, Bell, Shield, CreditCard, Key } from 'lucide-react';
+import { useState, useEffect, useCallback } from 'react';
+import { User, Bell, Shield, CreditCard, Key, ExternalLink, CheckCircle, AlertCircle, Loader2 } from 'lucide-react';
+import { api } from '../../lib/api';
+import type { ConnectStatus } from '../../lib/api';
+import { PaymentMethodsSection } from './PaymentMethodsSection';
 
 type SettingsTab = 'profile' | 'notifications' | 'security' | 'billing' | 'api_keys';
 
@@ -91,9 +94,158 @@ function SettingRow({
   );
 }
 
+function StatusBadge({ ok, label }: { ok: boolean; label: string }) {
+  return (
+    <div className="flex items-center" style={{ gap: '8px' }}>
+      {ok ? (
+        <CheckCircle className="w-4 h-4 text-green-400" />
+      ) : (
+        <AlertCircle className="w-4 h-4 text-yellow-400" />
+      )}
+      <span className={`text-[13px] ${ok ? 'text-green-400' : 'text-yellow-400'}`}>{label}</span>
+    </div>
+  );
+}
+
+function ConnectSection() {
+  const [status, setStatus] = useState<ConnectStatus | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [actionLoading, setActionLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const fetchStatus = useCallback(async () => {
+    try {
+      const s = await api.getConnectStatus();
+      setStatus(s);
+    } catch {
+      setError('Failed to load payout status');
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchStatus();
+  }, [fetchStatus]);
+
+  const handleOnboard = async () => {
+    setActionLoading(true);
+    setError(null);
+    try {
+      const result = await api.startConnectOnboarding();
+      window.location.href = result.onboarding_url;
+    } catch {
+      setError('Failed to start onboarding');
+      setActionLoading(false);
+    }
+  };
+
+  const handleLoginLink = async () => {
+    setActionLoading(true);
+    setError(null);
+    try {
+      const result = await api.getConnectLoginLink();
+      window.open(result.url, '_blank');
+    } catch {
+      setError('Failed to open Stripe dashboard');
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center" style={{ padding: '48px' }}>
+        <Loader2 className="w-6 h-6 text-[#64748B] animate-spin" />
+      </div>
+    );
+  }
+
+  const hasAccount = status?.account_id != null;
+  const isComplete = status?.charges_enabled && status?.payouts_enabled;
+  const inProgress = hasAccount && !isComplete;
+
+  return (
+    <div className="flex flex-col" style={{ gap: '24px' }}>
+      <p className="text-[13px] text-[#64748B]">
+        Set up your payout account so your agents can receive payments from marketplace transactions.
+      </p>
+
+      {error && (
+        <div
+          className="rounded-lg text-[13px] text-red-400"
+          style={{ padding: '12px 16px', backgroundColor: 'rgba(239, 68, 68, 0.1)' }}
+        >
+          {error}
+        </div>
+      )}
+
+      {/* Status indicators */}
+      {hasAccount && (
+        <div
+          className="rounded-lg flex flex-col"
+          style={{ padding: '16px', gap: '12px', backgroundColor: '#0F172A' }}
+        >
+          <StatusBadge ok={status!.details_submitted} label={status!.details_submitted ? 'Details submitted' : 'Details incomplete'} />
+          <StatusBadge ok={status!.charges_enabled} label={status!.charges_enabled ? 'Charges enabled' : 'Charges pending'} />
+          <StatusBadge ok={status!.payouts_enabled} label={status!.payouts_enabled ? 'Payouts enabled' : 'Payouts pending'} />
+        </div>
+      )}
+
+      {/* Actions */}
+      <div className="flex items-center" style={{ gap: '12px' }}>
+        {!hasAccount && (
+          <button
+            onClick={handleOnboard}
+            disabled={actionLoading}
+            className="flex items-center rounded-lg text-[14px] font-medium text-white bg-[#A855F7] hover:bg-[#9333EA] transition-colors disabled:opacity-50"
+            style={{ padding: '10px 20px', gap: '8px' }}
+          >
+            {actionLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <CreditCard className="w-4 h-4" />}
+            Set up payouts
+          </button>
+        )}
+
+        {inProgress && (
+          <button
+            onClick={handleOnboard}
+            disabled={actionLoading}
+            className="flex items-center rounded-lg text-[14px] font-medium text-white bg-[#A855F7] hover:bg-[#9333EA] transition-colors disabled:opacity-50"
+            style={{ padding: '10px 20px', gap: '8px' }}
+          >
+            {actionLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <ExternalLink className="w-4 h-4" />}
+            Resume onboarding
+          </button>
+        )}
+
+        {isComplete && (
+          <button
+            onClick={handleLoginLink}
+            disabled={actionLoading}
+            className="flex items-center rounded-lg text-[14px] font-medium text-white bg-[#334155] hover:bg-[#475569] transition-colors disabled:opacity-50"
+            style={{ padding: '10px 20px', gap: '8px' }}
+          >
+            {actionLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <ExternalLink className="w-4 h-4" />}
+            Stripe Dashboard
+          </button>
+        )}
+      </div>
+    </div>
+  );
+}
+
 export function SettingsPage() {
   const [activeTab, setActiveTab] = useState<SettingsTab>('notifications');
   const [settings, setSettings] = useState(notificationSettings);
+
+  // Check URL params for tab override (e.g. returning from Stripe onboarding)
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const tab = params.get('tab');
+    if (tab === 'billing') {
+      setActiveTab('billing');
+    }
+  }, []);
 
   const handleToggle = (id: string, enabled: boolean) => {
     setSettings((prev) => prev.map((s) => (s.id === id ? { ...s, enabled } : s)));
@@ -192,12 +344,20 @@ export function SettingsPage() {
 
           {/* Billing Tab */}
           {activeTab === 'billing' && (
-            <div className="rounded-xl bg-[#1E293B]" style={{ padding: '32px' }}>
-              <h2 className="text-[18px] font-semibold text-white" style={{ marginBottom: '24px' }}>
-                Billing Settings
-              </h2>
-              <p className="text-[14px] text-[#64748B]">Billing settings will be available soon.</p>
-            </div>
+            <>
+              <div className="rounded-xl bg-[#1E293B]" style={{ padding: '32px' }}>
+                <h2 className="text-[18px] font-semibold text-white" style={{ marginBottom: '24px' }}>
+                  Payment Methods
+                </h2>
+                <PaymentMethodsSection />
+              </div>
+              <div className="rounded-xl bg-[#1E293B]" style={{ padding: '32px' }}>
+                <h2 className="text-[18px] font-semibold text-white" style={{ marginBottom: '24px' }}>
+                  Payouts
+                </h2>
+                <ConnectSection />
+              </div>
+            </>
           )}
 
           {/* API Keys Tab */}

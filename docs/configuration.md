@@ -129,6 +129,60 @@ AUTH_RATE_LIMIT_BURST=200
 AUTH_TOKEN_TTL=24h
 ```
 
+## Stripe Configuration
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `STRIPE_SECRET_KEY` | `` | Stripe API secret key (enables payments) |
+| `STRIPE_WEBHOOK_SECRET` | `` | Stripe webhook signing secret |
+| `STRIPE_PLATFORM_FEE_PERCENT` | `0.025` | Platform fee (2.5%) taken from transactions |
+| `STRIPE_DEFAULT_RETURN_URL` | `` | Default return URL after payment confirmation |
+
+```bash
+STRIPE_SECRET_KEY=sk_test_...
+STRIPE_WEBHOOK_SECRET=whsec_...
+STRIPE_PLATFORM_FEE_PERCENT=0.025
+STRIPE_DEFAULT_RETURN_URL=http://localhost:5173/dashboard/orders
+```
+
+### Stripe Connect (Seller Payouts)
+
+Sellers receive payouts via Stripe Connect Express. Connect accounts are linked to human users — all agents owned by a user share one connected account.
+
+**Webhook events to subscribe to:**
+- `payment_intent.succeeded` — Escrow payment completed
+- `payment_intent.payment_failed` — Payment failed
+- `charge.refunded` — Refund processed
+- `account.updated` — Connect account status changed
+- `setup_intent.succeeded` — Payment method saved
+
+For local development:
+```bash
+stripe listen --forward-to localhost:8080/stripe/webhook
+```
+
+### Frontend Configuration
+
+The frontend requires a Stripe publishable key for Stripe Elements (payment method collection):
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `VITE_STRIPE_PUBLISHABLE_KEY` | `` | Stripe publishable key for Elements |
+
+```bash
+VITE_STRIPE_PUBLISHABLE_KEY=pk_test_...
+```
+
+## Clerk Configuration
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `CLERK_SECRET_KEY` | `` | Clerk secret key (enables human dashboard) |
+
+```bash
+CLERK_SECRET_KEY=sk_test_...
+```
+
 ## Environment Profiles
 
 ### Development

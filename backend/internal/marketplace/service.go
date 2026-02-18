@@ -18,14 +18,14 @@ type TransactionCreator interface {
 	CreateFromOffer(ctx context.Context, buyerID, sellerID uuid.UUID, requestID, offerID *uuid.UUID, amount float64, currency string) (uuid.UUID, error)
 }
 
-// WalletChecker interface for checking wallet balance.
-type WalletChecker interface {
-	GetAgentWalletBalance(ctx context.Context, agentID uuid.UUID) (available float64, err error)
+// SpendingChecker checks spending limits for an agent.
+type SpendingChecker interface {
+	CheckSpendingLimit(ctx context.Context, agentID uuid.UUID, amount float64) error
 }
 
-// PaymentCreator interface for creating payment intents.
+// PaymentCreator interface for creating escrow payments.
 type PaymentCreator interface {
-	CreateEscrowPayment(ctx context.Context, transactionID, buyerID, sellerID string, amount float64, currency string) (paymentIntentID, clientSecret string, err error)
+	CreateEscrowPayment(ctx context.Context, transactionID, buyerID, sellerID string, amount float64, currency string) (paymentIntentID string, err error)
 }
 
 // ListingTransactionCreator interface for creating transactions from listing purchases.
@@ -38,7 +38,7 @@ type Service struct {
 	repo                      RepositoryInterface
 	publisher                 EventPublisher
 	transactionCreator        TransactionCreator
-	walletChecker             WalletChecker
+	spendingChecker           SpendingChecker
 	paymentCreator            PaymentCreator
 	listingTransactionCreator ListingTransactionCreator
 }
@@ -56,9 +56,9 @@ func (s *Service) SetTransactionCreator(tc TransactionCreator) {
 	s.transactionCreator = tc
 }
 
-// SetWalletChecker sets the wallet checker (to avoid circular dependency).
-func (s *Service) SetWalletChecker(wc WalletChecker) {
-	s.walletChecker = wc
+// SetSpendingChecker sets the spending checker (to avoid circular dependency).
+func (s *Service) SetSpendingChecker(sc SpendingChecker) {
+	s.spendingChecker = sc
 }
 
 // SetPaymentCreator sets the payment creator (to avoid circular dependency).
@@ -200,10 +200,10 @@ func (s *Service) PurchaseListing(ctx context.Context, buyerID uuid.UUID, listin
 		return nil, fmt.Errorf("failed to create transaction: %w", err)
 	}
 
-	// Create payment intent if payment creator is configured
-	var clientSecret string
+	// Auto-fund escrow via off-session payment
+	var paymentIntentID string
 	if s.paymentCreator != nil {
-		_, clientSecret, err = s.paymentCreator.CreateEscrowPayment(
+		paymentIntentID, err = s.paymentCreator.CreateEscrowPayment(
 			ctx,
 			transactionID.String(),
 			buyerID.String(),
@@ -212,11 +212,10 @@ func (s *Service) PurchaseListing(ctx context.Context, buyerID uuid.UUID, listin
 			currency,
 		)
 		if err != nil {
-			return nil, fmt.Errorf("failed to create payment intent: %w", err)
+			return nil, fmt.Errorf("failed to create payment: %w", err)
 		}
 	}
 
-	// Publish event to notify seller
 	s.publishEvent(ctx, "listing.purchased", map[string]any{
 		"listing_id":     listingID,
 		"transaction_id": transactionID,
@@ -228,11 +227,11 @@ func (s *Service) PurchaseListing(ctx context.Context, buyerID uuid.UUID, listin
 	})
 
 	return &PurchaseResult{
-		TransactionID: transactionID,
-		ClientSecret:  clientSecret,
-		Amount:        totalAmount,
-		Currency:      currency,
-		Status:        "pending",
+		TransactionID:   transactionID,
+		PaymentIntentID: paymentIntentID,
+		Amount:          totalAmount,
+		Currency:        currency,
+		Status:          "pending",
 	}, nil
 }
 
@@ -420,14 +419,10 @@ func (s *Service) AcceptOffer(ctx context.Context, requesterID uuid.UUID, offerI
 		return nil, fmt.Errorf("offer is not pending")
 	}
 
-	// Check wallet balance if wallet checker is available
-	if s.walletChecker != nil {
-		balance, err := s.walletChecker.GetAgentWalletBalance(ctx, requesterID)
-		if err != nil {
-			return nil, fmt.Errorf("failed to check wallet balance: %w", err)
-		}
-		if balance < offer.PriceAmount {
-			return nil, fmt.Errorf("insufficient funds: need %.2f %s, have %.2f", offer.PriceAmount, offer.PriceCurrency, balance)
+	// Check spending limits
+	if s.spendingChecker != nil {
+		if err := s.spendingChecker.CheckSpendingLimit(ctx, requesterID, offer.PriceAmount); err != nil {
+			return nil, fmt.Errorf("spending limit check failed: %w", err)
 		}
 	}
 
