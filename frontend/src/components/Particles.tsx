@@ -35,6 +35,9 @@ const P = { mass: 1e7, pMass: 1e4, spin: 2.75, maxSpd: 8, damp: 0.1, bounds: 14,
 
 export function Particles() {
   const containerRef = useRef<HTMLDivElement>(null);
+  const geometryRef = useRef<THREE.PlaneGeometry | null>(null);
+  const materialRef = useRef<THREE.SpriteNodeMaterial | null>(null);
+  const meshRef = useRef<THREE.InstancedMesh | null>(null);
 
   useEffect(() => {
     const container = containerRef.current;
@@ -71,10 +74,6 @@ export function Particles() {
     const raycaster = new THREE.Raycaster();
     const groundPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
     const intersectPoint = new THREE.Vector3();
-
-    let geometry: THREE.PlaneGeometry | null = null;
-    let material: THREE.SpriteNodeMaterial | null = null;
-    let mesh: THREE.InstancedMesh | null = null;
 
     function updateSharedState() {
       const target = mouseOnCanvas ? 1 : 0;
@@ -171,17 +170,17 @@ export function Particles() {
         velocityStorage.element(idx).assign(velocity);
       })().compute(count);
 
-      material = new THREE.SpriteNodeMaterial({ blending: THREE.AdditiveBlending, depthWrite: false });
-      material.positionNode = positionStorage.toAttribute();
-      material.colorNode = Fn(() => {
+      materialRef.current = new THREE.SpriteNodeMaterial({ blending: THREE.AdditiveBlending, depthWrite: false });
+      materialRef.current.positionNode = positionStorage.toAttribute();
+      materialRef.current.colorNode = Fn(() => {
         const spd = length(velocityStorage.toAttribute());
         return vec4(mix(colorAUniform, colorBUniform, smoothstep(0, 0.5, div(spd, maxSpeedUniform))), 1);
       })();
-      material.scaleNode = Fn(() => float(instanceIndex).mul(0.000007629).add(0.5).fract().mul(0.75).add(0.25).mul(scaleUniform))();
+      materialRef.current.scaleNode = Fn(() => float(instanceIndex).mul(0.000007629).add(0.5).fract().mul(0.75).add(0.25).mul(scaleUniform))();
 
-      geometry = new THREE.PlaneGeometry(1, 1);
-      mesh = new THREE.InstancedMesh(geometry, material, count);
-      scene.add(mesh);
+      geometryRef.current = new THREE.PlaneGeometry(1, 1);
+      meshRef.current = new THREE.InstancedMesh(geometryRef.current, materialRef.current, count);
+      scene.add(meshRef.current);
 
       renderer.compute(initCompute);
       renderer.setAnimationLoop(() => {
@@ -228,17 +227,17 @@ export function Particles() {
       const colorBU = uniform(color('#ffa575'));
       const scaleU = uniform(0.008);
 
-      material = new THREE.SpriteNodeMaterial({ blending: THREE.AdditiveBlending, depthWrite: false });
-      material.positionNode = posS.toAttribute();
-      material.colorNode = Fn(() => {
+      materialRef.current = new THREE.SpriteNodeMaterial({ blending: THREE.AdditiveBlending, depthWrite: false });
+      materialRef.current.positionNode = posS.toAttribute();
+      materialRef.current.colorNode = Fn(() => {
         const spd = length(velS.toAttribute());
         return vec4(mix(colorAU, colorBU, smoothstep(0, 0.5, div(spd, maxSpeedU))), 1);
       })();
-      material.scaleNode = Fn(() => float(instanceIndex).mul(0.000007629).add(0.5).fract().mul(0.75).add(0.25).mul(scaleU))();
+      materialRef.current.scaleNode = Fn(() => float(instanceIndex).mul(0.000007629).add(0.5).fract().mul(0.75).add(0.25).mul(scaleU))();
 
-      geometry = new THREE.PlaneGeometry(1, 1);
-      mesh = new THREE.InstancedMesh(geometry, material, count);
-      scene.add(mesh);
+      geometryRef.current = new THREE.PlaneGeometry(1, 1);
+      meshRef.current = new THREE.InstancedMesh(geometryRef.current, materialRef.current, count);
+      scene.add(meshRef.current);
 
       renderer.setAnimationLoop(() => {
         if (!isVisible) return;
@@ -380,9 +379,9 @@ export function Particles() {
       document.removeEventListener('mouseleave', onMouseLeave);
       window.removeEventListener('scroll', onScroll);
       if (initialized) {
-        mesh && scene.remove(mesh);
-        geometry?.dispose();
-        material?.dispose();
+        meshRef.current && scene.remove(meshRef.current);
+        geometryRef.current?.dispose();
+        materialRef.current?.dispose();
         renderer.dispose();
       }
       if (renderer.domElement.parentNode) {
